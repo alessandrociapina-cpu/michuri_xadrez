@@ -10,7 +10,13 @@ import { VitePWA } from 'vite-plugin-pwa';
 //   Cross-Origin-Embedder-Policy: require-corp
 // e habilitar os headers aqui no dev server e na hospedagem de produção.
 
+// Caminho base da publicação. No GitHub Pages como "project site", o app é
+// servido em https://<usuario>.github.io/michuri_xadrez/ — então TODOS os
+// caminhos de assets precisam desse prefixo. Em dev o Vite usa '/'.
+const base = '/michuri_xadrez/';
+
 export default defineConfig({
+  base,
   plugins: [
     react(),
     VitePWA({
@@ -35,7 +41,9 @@ export default defineConfig({
         background_color: '#16130E',
         display: 'standalone',
         orientation: 'portrait-primary',
-        start_url: '/',
+        // Em subpasta, escopo e start_url precisam apontar para o base.
+        scope: base,
+        start_url: base,
         icons: [
           {
             src: 'icons/icon-192.png',

@@ -54,8 +54,12 @@ export class Engine {
   private ultimoMate?: number;
 
   constructor() {
-    const arquivo = suportaWasm() ? '/engine/stockfish.wasm.js' : '/engine/stockfish.js';
-    this.w = new Worker(arquivo);
+    // BASE_URL termina com "/" (ex.: "/michuri_xadrez/" em produção, "/" em dev).
+    // Usar caminho relativo ao base garante que o worker — e o stockfish.wasm que
+    // ele carrega ao lado — sejam encontrados também quando o app está numa subpasta.
+    const base = import.meta.env.BASE_URL;
+    const arquivo = suportaWasm() ? 'engine/stockfish.wasm.js' : 'engine/stockfish.js';
+    this.w = new Worker(base + arquivo);
     this.pronto = new Promise<void>((res) => {
       this.resolvePronto = res;
     });

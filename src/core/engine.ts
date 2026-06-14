@@ -7,22 +7,22 @@ export type Nivel = 'basico' | 'intermediario' | 'profissional';
 type ConfigNivel = {
   /** Rótulo amigável para a UI. */
   rotulo: string;
-  /** Elo-alvo quando limitamos a força. */
-  elo: number;
+  /**
+   * Força via "Skill Level" (0–20). ESTA build do Stockfish (Multi-Variant,
+   * 2019) NÃO expõe UCI_Elo/UCI_LimitStrength — só Skill Level. Quanto menor,
+   * mais o motor "erra" de propósito.
+   */
+  skill: number;
+  /** Elo aproximado correspondente, só para exibir ao usuário. */
+  eloAprox: number;
   /** Tempo de cálculo por lance, em ms. */
   movetimeMs: number;
-  /**
-   * Se false, jogamos com força total (sem UCI_LimitStrength). O nível
-   * profissional usa isto: o Stockfish 10 satura o UCI_Elo perto de ~2850, então
-   * para "força máxima" desligamos o limitador e damos mais tempo de cálculo.
-   */
-  limitarForca: boolean;
 };
 
 export const NIVEIS: Record<Nivel, ConfigNivel> = {
-  basico: { rotulo: 'Básico', elo: 1350, movetimeMs: 300, limitarForca: true },
-  intermediario: { rotulo: 'Intermediário', elo: 1900, movetimeMs: 700, limitarForca: true },
-  profissional: { rotulo: 'Profissional', elo: 3000, movetimeMs: 2000, limitarForca: false },
+  basico: { rotulo: 'Básico', skill: 3, eloAprox: 1350, movetimeMs: 300 },
+  intermediario: { rotulo: 'Intermediário', skill: 11, eloAprox: 1900, movetimeMs: 700 },
+  profissional: { rotulo: 'Profissional', skill: 20, eloAprox: 2700, movetimeMs: 2000 },
 };
 
 function suportaWasm(): boolean {
@@ -39,8 +39,7 @@ function suportaWasm(): boolean {
 export class Engine {
   private w: Worker;
   private movetime = 700;
-  private limitarForca = true;
-  private elo = 1900;
+  private skill = 11;
 
   /** Resolve quando o motor terminou o handshake UCI e está pronto. */
   readonly pronto: Promise<void>;
@@ -111,8 +110,9 @@ export class Engine {
       const line = raw.trim();
       if (!line) return;
       if (line === 'uciok') {
-        // Opções base; a força é definida em setNivel.
-        this.send('setoption name Threads value 1');
+        // NÃO enviar "setoption name Threads": apesar de a build anunciar
+        // Threads (min 1, max 1), recebê-lo trava este worker single-thread e o
+        // motor nunca mais responde (nem readyok). A força vem de setNivel.
         this.send('isready');
       } else if (line === 'readyok') {
         this.resolvePronto();
@@ -143,14 +143,9 @@ export class Engine {
   setNivel(n: Nivel): void {
     const c = NIVEIS[n];
     this.movetime = c.movetimeMs;
-    this.limitarForca = c.limitarForca;
-    this.elo = c.elo;
-    if (c.limitarForca) {
-      this.send('setoption name UCI_LimitStrength value true');
-      this.send(`setoption name UCI_Elo value ${c.elo}`);
-    } else {
-      this.send('setoption name UCI_LimitStrength value false');
-    }
+    this.skill = c.skill;
+    // Esta build usa "Skill Level" (0–20) para regular a força.
+    this.send(`setoption name Skill Level value ${c.skill}`);
   }
 
   /**
@@ -229,8 +224,8 @@ export class Engine {
   }
 
   /** Snapshot da configuração atual, para a UI. */
-  get configAtual(): { movetimeMs: number; elo: number; limitarForca: boolean } {
-    return { movetimeMs: this.movetime, elo: this.elo, limitarForca: this.limitarForca };
+  get configAtual(): { movetimeMs: number; skill: number } {
+    return { movetimeMs: this.movetime, skill: this.skill };
   }
 
   private send(cmd: string): void {

@@ -277,8 +277,8 @@ export function Play({ ativo }: { ativo: boolean }) {
 
 function descricaoNivel(n: Nivel): string {
   const c = NIVEIS[n];
-  if (!c.limitarForca) return `Força máxima · ${c.movetimeMs} ms por lance.`;
-  return `Elo ≈ ${c.elo} · ${c.movetimeMs} ms por lance.`;
+  const forca = c.skill >= 20 ? 'força máxima' : `Elo ≈ ${c.eloAprox}`;
+  return `${forca} · habilidade ${c.skill}/20 · ${c.movetimeMs} ms por lance.`;
 }
 
 // ---- Lista de lances (placar) em notação PT-BR ----

@@ -1,0 +1,60 @@
+.app-wrap {
+  max-width: 1080px;
+  margin: 0 auto;
+  padding: clamp(16px, 3vw, 40px);
+  padding-top: max(clamp(16px, 3vw, 40px), env(safe-area-inset-top));
+}
+
+.app-top {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+  border-bottom: 1px solid var(--line);
+  padding-bottom: 18px;
+  margin-bottom: 26px;
+}
+
+.app-title {
+  font-family: 'Fraunces', serif;
+  font-weight: 900;
+  font-size: clamp(26px, 4.5vw, 42px);
+  line-height: 1.02;
+  margin-top: 4px;
+  letter-spacing: -0.01em;
+}
+.app-title em {
+  font-style: italic;
+  font-weight: 400;
+  color: var(--muted);
+}
+
+.app-nav {
+  display: flex;
+  gap: 6px;
+  background: var(--ink-2);
+  border: 1px solid var(--line);
+  border-radius: 99px;
+  padding: 4px;
+}
+.navbtn {
+  background: transparent;
+  border: none;
+  color: var(--muted);
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 13px;
+  letter-spacing: 0.04em;
+  padding: 9px 18px;
+  border-radius: 99px;
+  cursor: pointer;
+  transition: 0.15s;
+}
+.navbtn:hover {
+  color: var(--bone);
+}
+.navbtn.on {
+  background: var(--gold);
+  color: var(--ink);
+  font-weight: 700;
+}

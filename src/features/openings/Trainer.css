@@ -1,0 +1,233 @@
+.trn-root {
+  display: flex;
+  flex-direction: column;
+  gap: 22px;
+}
+
+.trn-head {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 18px;
+  flex-wrap: wrap;
+}
+.trn-head-sel {
+  flex: 1;
+  min-width: 240px;
+}
+
+.modo-switch {
+  display: flex;
+  gap: 6px;
+  background: var(--ink-2);
+  border: 1px solid var(--line);
+  border-radius: 99px;
+  padding: 4px;
+}
+.modo-btn {
+  background: transparent;
+  border: none;
+  color: var(--muted);
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 13px;
+  padding: 8px 16px;
+  border-radius: 99px;
+  cursor: pointer;
+  transition: 0.15s;
+}
+.modo-btn:hover {
+  color: var(--bone);
+}
+.modo-btn.on {
+  background: var(--gold);
+  color: var(--ink);
+  font-weight: 700;
+}
+
+.trn-cols {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: clamp(20px, 3vw, 40px);
+  align-items: start;
+}
+@media (max-width: 820px) {
+  .trn-cols {
+    grid-template-columns: 1fr;
+  }
+}
+
+.trn-left {
+  position: sticky;
+  top: 24px;
+}
+@media (max-width: 820px) {
+  .trn-left {
+    position: static;
+  }
+}
+
+.trn-right {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.trn-controls {
+  display: flex;
+  gap: 8px;
+  margin-top: 16px;
+}
+.trn-controls .btn {
+  flex: 1;
+  font-size: 16px;
+  padding: 10px 0;
+}
+
+.trn-progress {
+  text-align: center;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+  color: var(--muted);
+  margin-top: 10px;
+  letter-spacing: 0.1em;
+}
+
+/* ---- placar / árvore de lances ---- */
+.scoresheet {
+  background: var(--ink-2);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 14px 16px;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 14px;
+  line-height: 2.05;
+  max-height: 220px;
+  overflow: auto;
+}
+.trn-sheet .mvnum {
+  color: var(--muted);
+  margin-right: 2px;
+}
+.trn-sheet .mv {
+  display: inline-block;
+  padding: 1px 6px;
+  border-radius: 4px;
+  color: var(--bone);
+  transition: 0.1s;
+}
+.trn-sheet .mv.clic {
+  cursor: pointer;
+}
+.trn-sheet .mv.clic:hover {
+  background: var(--ink-3);
+}
+.trn-sheet .mv.on {
+  background: var(--gold);
+  color: var(--ink);
+  font-weight: 700;
+}
+
+/* ---- nota da jogada ---- */
+.nota {
+  background: linear-gradient(180deg, var(--ink-2), rgba(32, 27, 20, 0.4));
+  border: 1px solid var(--line);
+  border-left: 3px solid var(--gold);
+  border-radius: 8px;
+  padding: 18px 20px;
+  min-height: 120px;
+}
+.nota-ply {
+  font-family: 'Fraunces', serif;
+  font-size: 24px;
+  font-weight: 600;
+}
+.nota-ply small {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 12px;
+  color: var(--muted);
+  font-weight: 400;
+  margin-left: 8px;
+  letter-spacing: 0.1em;
+}
+.nota-body {
+  margin-top: 10px;
+  font-size: 15px;
+  line-height: 1.62;
+  color: #ddd3bc;
+}
+.nota-body.intro {
+  color: var(--muted);
+  font-style: italic;
+}
+
+/* ---- análise do motor ---- */
+.analise-bloco {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.analise-bloco .btn {
+  width: 100%;
+}
+.analise-res {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background: var(--ink-2);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 12px 14px;
+  font-size: 14px;
+  color: #ddd3bc;
+}
+.analise-eval {
+  font-family: 'JetBrains Mono', monospace;
+  font-weight: 700;
+  font-size: 18px;
+  color: var(--gold);
+  flex: none;
+}
+.analise-dica {
+  font-size: 12px;
+  color: var(--muted);
+  line-height: 1.5;
+}
+
+/* ---- treino ---- */
+.treino-barra {
+  display: flex;
+  align-items: flex-end;
+  gap: 12px;
+  margin-top: 16px;
+}
+.treino-lado {
+  flex: 1;
+}
+.treino-barra .btn {
+  flex: none;
+}
+
+.treino-feedback {
+  background: var(--ink-2);
+  border: 1px solid var(--line);
+  border-left: 3px solid var(--muted);
+  border-radius: 8px;
+  padding: 16px 18px;
+  font-size: 15px;
+  line-height: 1.6;
+  color: #ddd3bc;
+  min-height: 96px;
+}
+.treino-feedback .placeholder {
+  color: var(--muted);
+  font-style: italic;
+}
+.treino-feedback.certo {
+  border-left-color: var(--green);
+}
+.treino-feedback.errado {
+  border-left-color: var(--rust);
+}
+.treino-feedback.fim {
+  border-left-color: var(--gold);
+}

@@ -1,0 +1,25 @@
+# dependências
+node_modules/
+
+# build
+dist/
+dist-ssr/
+*.local
+
+# logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# editores
+.vscode/*
+!.vscode/extensions.json
+.idea/
+.DS_Store
+
+# vite-plugin-pwa (artefatos gerados)
+dev-dist/
+
+# typescript incremental build
+*.tsbuildinfo

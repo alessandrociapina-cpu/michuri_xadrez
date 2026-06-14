@@ -37,6 +37,10 @@
 .status.fim {
   color: var(--gold);
 }
+.status.erro {
+  color: var(--rust);
+  align-items: flex-start;
+}
 .status .dot {
   width: 9px;
   height: 9px;

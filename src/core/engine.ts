@@ -45,13 +45,19 @@ export class Engine {
   /** Resolve quando o motor terminou o handshake UCI e está pronto. */
   readonly pronto: Promise<void>;
   private resolvePronto!: () => void;
+  private rejeitarPronto!: (e: Error) => void;
+  private prontoConcluido = false;
 
-  /** Resolução do bestMove em andamento (se houver). */
+  /** Resolução/rejeição do bestMove em andamento (se houver). */
   private resolveLance?: (uci: string) => void;
+  private rejeitaLance?: (e: Error) => void;
 
   /** Última avaliação reportada pelo motor (perspectiva de quem tem a vez). */
   private ultimoCp?: number;
   private ultimoMate?: number;
+
+  /** Mensagem do último erro do worker, para diagnóstico na UI. */
+  erro?: string;
 
   constructor() {
     // BASE_URL termina com "/" (ex.: "/michuri_xadrez/" em produção, "/" em dev).
@@ -59,13 +65,50 @@ export class Engine {
     // ele carrega ao lado — sejam encontrados também quando o app está numa subpasta.
     const base = import.meta.env.BASE_URL;
     const arquivo = suportaWasm() ? 'engine/stockfish.wasm.js' : 'engine/stockfish.js';
-    this.w = new Worker(base + arquivo);
-    this.pronto = new Promise<void>((res) => {
-      this.resolvePronto = res;
+    const urlWorker = base + arquivo;
+    try {
+      this.w = new Worker(urlWorker);
+    } catch (e) {
+      // Falha imediata ao criar o worker (ex.: caminho/MIME inválido).
+      this.w = undefined as unknown as Worker;
+      this.erro = `Não foi possível iniciar o worker do motor (${urlWorker}): ${(e as Error).message}`;
+      this.pronto = Promise.reject(new Error(this.erro));
+      // Evita "unhandled rejection" caso ninguém aguarde de imediato.
+      this.pronto.catch(() => {});
+      return;
+    }
+
+    this.pronto = new Promise<void>((res, rej) => {
+      this.resolvePronto = () => {
+        this.prontoConcluido = true;
+        res();
+      };
+      this.rejeitarPronto = rej;
     });
+    // Evita "unhandled rejection" se o handshake falhar antes de alguém aguardar.
+    this.pronto.catch(() => {});
+
+    // Erros do worker (falha ao carregar o .wasm, exceção interna, etc.) não
+    // podem ficar silenciosos — senão a UI fica "pensando" para sempre.
+    this.w.onerror = (ev: ErrorEvent) => {
+      const msg = ev.message || 'erro desconhecido no worker do motor';
+      this.erro = `Falha no motor (${urlWorker}): ${msg}`;
+      // Eslint/console: ajuda a diagnosticar no DevTools.
+      console.error('[engine]', this.erro, ev);
+      if (!this.prontoConcluido) this.rejeitarPronto?.(new Error(this.erro));
+      const rej = this.rejeitaLance;
+      this.resolveLance = undefined;
+      this.rejeitaLance = undefined;
+      rej?.(new Error(this.erro));
+    };
+    this.w.onmessageerror = () => {
+      this.erro = 'Mensagem inválida recebida do worker do motor.';
+      console.error('[engine]', this.erro);
+    };
 
     this.w.onmessage = (e: MessageEvent) => {
-      const line: string = typeof e.data === 'string' ? e.data : (e.data?.data ?? '');
+      const raw: string = typeof e.data === 'string' ? e.data : (e.data?.data ?? '');
+      const line = raw.trim();
       if (!line) return;
       if (line === 'uciok') {
         // Opções base; a força é definida em setNivel.
@@ -88,6 +131,7 @@ export class Engine {
         const uci = line.split(' ')[1];
         const resolve = this.resolveLance;
         this.resolveLance = undefined;
+        this.rejeitaLance = undefined;
         resolve?.(uci);
       }
     };
@@ -135,8 +179,35 @@ export class Engine {
   }
 
   private go(fen: string, movetimeMs: number): Promise<string> {
-    return new Promise<string>((res) => {
-      this.resolveLance = res;
+    return new Promise<string>((res, rej) => {
+      // Watchdog: se o motor não responder em tempo hábil (ex.: worker travado
+      // ou .wasm que não carregou), rejeitamos em vez de deixar a UI "pensando"
+      // para sempre. Folga generosa por causa da 1ª compilação do wasm.
+      const limite = movetimeMs + 15000;
+      const timer = setTimeout(() => {
+        if (this.resolveLance === envolver) {
+          this.resolveLance = undefined;
+          this.rejeitaLance = undefined;
+          rej(
+            new Error(
+              this.erro ??
+                `O motor não respondeu em ${Math.round(limite / 1000)}s. ` +
+                  'Verifique se os arquivos em /engine/ estão acessíveis.',
+            ),
+          );
+        }
+      }, limite);
+
+      const envolver = (uci: string) => {
+        clearTimeout(timer);
+        res(uci);
+      };
+      const envolverErro = (e: Error) => {
+        clearTimeout(timer);
+        rej(e);
+      };
+      this.resolveLance = envolver;
+      this.rejeitaLance = envolverErro;
       this.send(`position fen ${fen}`);
       this.send(`go movetime ${movetimeMs}`);
     });
@@ -154,7 +225,7 @@ export class Engine {
     } catch {
       /* worker já pode estar encerrado */
     }
-    this.w.terminate();
+    this.w?.terminate();
   }
 
   /** Snapshot da configuração atual, para a UI. */
@@ -163,6 +234,6 @@ export class Engine {
   }
 
   private send(cmd: string): void {
-    this.w.postMessage(cmd);
+    this.w?.postMessage(cmd);
   }
 }

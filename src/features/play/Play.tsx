@@ -33,6 +33,7 @@ export function Play({ ativo }: { ativo: boolean }) {
   const [pensando, setPensando] = useState(false);
   const [fimMsg, setFimMsg] = useState<string | undefined>();
   const [promo, setPromo] = useState<PromocaoPendente | null>(null);
+  const [erroMotor, setErroMotor] = useState<string | undefined>();
 
   // Cria o motor uma vez e ajusta o nível inicial.
   useEffect(() => {
@@ -65,6 +66,7 @@ export function Play({ ativo }: { ativo: boolean }) {
     const eng = engineRef.current;
     if (!eng || chess.isGameOver()) return;
     setPensando(true);
+    setErroMotor(undefined);
     try {
       const uci = await eng.bestMove(chess.fen());
       // A partida pode ter sido reiniciada enquanto o motor pensava.
@@ -78,6 +80,9 @@ export function Play({ ativo }: { ativo: boolean }) {
         /* lance inválido (não deveria ocorrer) — ignora */
       }
       sincronizar();
+    } catch (e) {
+      // Não deixa a UI "pensando" para sempre: mostra o erro real do motor.
+      setErroMotor((e as Error).message);
     } finally {
       setPensando(false);
     }
@@ -93,6 +98,7 @@ export function Play({ ativo }: { ativo: boolean }) {
     setFimMsg(undefined);
     setPromo(null);
     setPensando(false);
+    setErroMotor(undefined);
     // Se o jogador escolheu as pretas, o motor (brancas) abre a partida.
     if (lado === 'black') {
       void jogarMotor();
@@ -172,7 +178,8 @@ export function Play({ ativo }: { ativo: boolean }) {
   const numLance = Math.floor(sanHist.length / 2) + (sanHist.length % 2 === 0 ? 0 : 1);
 
   let statusTexto: string;
-  if (fimMsg) statusTexto = fimMsg;
+  if (erroMotor) statusTexto = `⚠ ${erroMotor}`;
+  else if (fimMsg) statusTexto = fimMsg;
   else if (pensando) statusTexto = 'O motor está pensando…';
   else if (vezDoJogador) statusTexto = emXeque(chess) ? 'Sua vez — você está em xeque!' : 'Sua vez de jogar.';
   else statusTexto = 'Aguardando o motor…';
@@ -195,7 +202,7 @@ export function Play({ ativo }: { ativo: boolean }) {
           )}
         </div>
 
-        <div className={'status' + (fimMsg ? ' fim' : '')}>
+        <div className={'status' + (erroMotor ? ' erro' : fimMsg ? ' fim' : '')}>
           <span className={'dot' + (pensando ? ' think' : vezDoJogador ? ' you' : '')} />
           {statusTexto}
         </div>

@@ -25,6 +25,11 @@ import './Play.css';
 
 type ProfViva = 'd14' | 'd18' | 'inf';
 
+// Visão já processada da análise ao vivo: a avaliação é guardada na perspectiva
+// das BRANCAS (estável entre os lances) junto do FEN a que se refere, para a
+// barra não "piscar" ao trocar de posição.
+type VivoView = { cpBrancas: number; depth: number; pv: string[]; fen: string };
+
 type Lado = 'white' | 'black';
 
 // Casas de promoção pendentes: guardamos origem/destino enquanto o jogador
@@ -55,7 +60,7 @@ export function Play({
   // --- Análise ao vivo (motor SEPARADO, em força máxima) ---
   const anEngineRef = useRef<Engine | null>(null);
   const [analiseViva, setAnaliseViva] = useState(false);
-  const [liveInfo, setLiveInfo] = useState<LiveInfo | null>(null);
+  const [vivo, setVivo] = useState<VivoView | null>(null);
   const [mostrarLinha, setMostrarLinha] = useState(false);
   const [mostrarLance, setMostrarLance] = useState(false);
   const [profViva, setProfViva] = useState<ProfViva>('d18');
@@ -96,19 +101,22 @@ export function Play({
   }, []);
 
   // Avalia continuamente a posição atual quando a análise ao vivo está ligada.
+  // NÃO zeramos o resultado anterior ao trocar de posição: a barra mantém o
+  // último valor (em ótica das brancas, sempre coerente) e desliza suavemente
+  // para o novo quando ele chega — assim ela não pisca a cada lance.
   const fimDeJogo = !!fimMsg;
   useEffect(() => {
-    if (!analiseViva || !ativo) return;
-    if (fimDeJogo) {
-      setLiveInfo(null);
-      return;
-    }
+    if (!analiseViva || !ativo || fimDeJogo) return;
     const fenAtual = fen;
-    setLiveInfo(null);
+    const brancasVez = fenAtual.split(' ')[1] === 'w';
     const depth = profViva === 'inf' ? undefined : profViva === 'd14' ? 14 : 18;
     const t = setTimeout(() => {
       const e = garantirAnEngine();
-      void e.startLive(fenAtual, { depth, onUpdate: (u) => setLiveInfo(u) });
+      void e.startLive(fenAtual, {
+        depth,
+        onUpdate: (u: LiveInfo) =>
+          setVivo({ cpBrancas: liveCpBrancas(u, brancasVez), depth: u.depth, pv: u.pv, fen: fenAtual }),
+      });
     }, 350);
     return () => {
       clearTimeout(t);
@@ -126,7 +134,7 @@ export function Play({
       const novo = !v;
       if (!novo) {
         anEngineRef.current?.stopLive();
-        setLiveInfo(null);
+        setVivo(null);
       }
       return novo;
     });
@@ -282,25 +290,27 @@ export function Play({
   else if (vezDoJogador) statusTexto = emXeque(chess) ? 'Sua vez — você está em xeque!' : 'Sua vez de jogar.';
   else statusTexto = 'Aguardando o motor…';
 
-  // Avaliação ao vivo (perspectiva das brancas) e seta do melhor lance.
-  const mostrarEval = analiseViva && !!liveInfo && !fimMsg;
-  const avalBrancas = mostrarEval ? liveCpBrancas(liveInfo!, corDaVez(chess) === 'white') : null;
-  const pvUci = analiseViva && liveInfo?.pv?.length ? liveInfo.pv[0] : undefined;
-  // Memoizado por valor (não por identidade) para o tabuleiro só redesenhar a
-  // seta quando o melhor lance realmente mudar — não a cada atualização de eval.
-  const arrowOrig = mostrarLance && !fimMsg && pvUci && pvUci.length >= 4 ? pvUci.slice(0, 2) : '';
-  const arrowDest = mostrarLance && !fimMsg && pvUci && pvUci.length >= 4 ? pvUci.slice(2, 4) : '';
+  // Avaliação ao vivo (perspectiva das brancas). A barra fica visível enquanto a
+  // análise estiver ligada, mantendo o último valor — sem piscar a cada lance.
+  const avalBrancas = analiseViva && vivo ? vivo.cpBrancas : null;
+  // A seta e a melhor linha só aparecem quando já se referem à posição ATUAL
+  // (evita apontar para casas da posição anterior durante o recálculo).
+  const vivoAtual = vivo && vivo.fen === fen ? vivo : null;
+  const pvUci = mostrarLance && !fimMsg && vivoAtual?.pv?.length ? vivoAtual.pv[0] : undefined;
+  const arrowOrig = pvUci && pvUci.length >= 4 ? pvUci.slice(0, 2) : '';
+  const arrowDest = pvUci && pvUci.length >= 4 ? pvUci.slice(2, 4) : '';
+  // Memoizado por valor para o tabuleiro só redesenhar a seta quando ela mudar.
   const shapes = useMemo<DrawShape[]>(
     () => (arrowOrig && arrowDest ? [{ orig: arrowOrig as Key, dest: arrowDest as Key, brush: 'green' }] : []),
     [arrowOrig, arrowDest],
   );
-  const linhaPv = analiseViva && liveInfo ? pvParaPtbr(fen, liveInfo.pv, 5) : '';
+  const linhaPv = vivoAtual ? pvParaPtbr(vivoAtual.fen, vivoAtual.pv, 5) : '';
 
   return (
     <div className="play-layout">
       <div className="board-col">
         {avalBrancas !== null && (
-          <EvalExterno cpBrancas={avalBrancas} sub={`ao vivo · prof. ${liveInfo!.depth}`} />
+          <EvalExterno cpBrancas={avalBrancas} sub={`ao vivo · prof. ${vivo!.depth}`} />
         )}
         <div className="board-stage">
           <div className="play-board-wrap">
@@ -326,16 +336,14 @@ export function Play({
           {statusTexto}
         </div>
 
-        {analiseViva && (mostrarLinha || mostrarLance) && (
+        {analiseViva && mostrarLinha && (
           <div className="play-pv">
             {fimMsg ? (
               <span className="pv-calc">fim de jogo</span>
-            ) : liveInfo ? (
-              mostrarLinha && linhaPv ? (
-                <span>
-                  melhor linha: <strong>{linhaPv}</strong>
-                </span>
-              ) : null
+            ) : linhaPv ? (
+              <span>
+                melhor linha: <strong>{linhaPv}</strong>
+              </span>
             ) : (
               <span className="pv-calc">calculando…</span>
             )}

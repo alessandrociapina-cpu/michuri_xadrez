@@ -3,6 +3,7 @@ import { Chessground } from 'chessground';
 import type { Api } from 'chessground/api';
 import type { Config } from 'chessground/config';
 import type { Key } from 'chessground/types';
+import type { DrawShape } from 'chessground/draw';
 
 // Tabuleiro COMPARTILHADO pelos dois módulos (Jogar e Aberturas). É só a camada
 // de renderização (chessground); a fonte da verdade do estado continua sendo o
@@ -27,6 +28,8 @@ export type BoardProps = {
   check?: boolean;
   /** Apenas visualização (sem arrastar peças). */
   viewOnly?: boolean;
+  /** Setas/marcações desenhadas no tabuleiro (ex.: melhor lance do motor). */
+  shapes?: DrawShape[];
   /**
    * Sinal para forçar a ressincronização do tabuleiro com o `fen` mesmo quando
    * o FEN não mudou (ex.: reverter um lance recusado no modo treino).
@@ -44,6 +47,7 @@ export function Board({
   lastMove,
   check,
   viewOnly,
+  shapes,
   syncSignal,
   onMove,
 }: BoardProps) {
@@ -104,7 +108,9 @@ export function Board({
         showDests: true,
       },
     });
-  }, [fen, orientation, movableColor, dests, lastMove, check, viewOnly, syncSignal]);
+    // Setas/marcações (ex.: seta do melhor lance na análise ao vivo).
+    api.setShapes(shapes ?? []);
+  }, [fen, orientation, movableColor, dests, lastMove, check, viewOnly, shapes, syncSignal]);
 
   // Coordenadas próprias, na margem do tabuleiro (alto contraste, fora das casas).
   const files = orientation === 'white'

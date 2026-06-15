@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
 import type { Key } from 'chessground/types';
+import type { DrawShape } from 'chessground/draw';
 import { Board } from '../../components/Board';
 import { Chess } from '../../core/chess';
-import { Engine } from '../../core/engine';
+import { Engine, type LiveInfo } from '../../core/engine';
 import { gerarPgn, lerPgn } from '../../core/pgn';
 import {
   analisarPartida,
@@ -48,6 +49,12 @@ export function Analise({ ativo, pgnInicial }: { ativo: boolean; pgnInicial?: st
   const [mudo, setMudoLocal] = useState(estaMudo());
   const [ajuda, setAjuda] = useState(false);
   const [jogo, setJogo] = useState<JogoFamoso | null>(null);
+
+  // Análise ao vivo (Módulo 1): avalia continuamente a posição mostrada.
+  const [aoVivo, setAoVivo] = useState(false);
+  const [liveInfo, setLiveInfo] = useState<LiveInfo | null>(null);
+  const [setaMelhor, setSetaMelhor] = useState(false); // seta do melhor lance (off por padrão)
+  const [profViva, setProfViva] = useState<'d14' | 'd18' | 'inf'>('d18');
 
   // Reprodução automática.
   const [tocando, setTocando] = useState(false);
@@ -116,7 +123,7 @@ export function Analise({ ativo, pgnInicial }: { ativo: boolean; pgnInicial?: st
     const hist = c.history({ verbose: true });
     const last = hist[hist.length - 1];
     const lastMove = last ? ([last.from, last.to] as [Key, Key]) : undefined;
-    return { fen: c.fen(), lastMove, emXeque: c.inCheck() };
+    return { fen: c.fen(), lastMove, emXeque: c.inCheck(), fim: c.isGameOver(), brancasVez: c.turn() === 'w' };
   }, [sans, ply]);
 
   // Navega até um ply, miando pelo lance recém-mostrado (se já analisado).
@@ -147,6 +154,34 @@ export function Analise({ ativo, pgnInicial }: { ativo: boolean; pgnInicial?: st
   useEffect(() => {
     if (!ativo) setTocando(false);
   }, [ativo]);
+
+  // Análise AO VIVO: ao ligar (ou navegar), avalia a posição atual em tempo real.
+  // Debounce de 350 ms evita acúmulo de requisições ao avançar/voltar rápido.
+  useEffect(() => {
+    if (!aoVivo || !ativo) return;
+    if (posicao.fim) {
+      // Posição terminal trava o motor (não devolve bestmove); não analisamos.
+      setLiveInfo(null);
+      return;
+    }
+    const fen = posicao.fen;
+    setLiveInfo(null);
+    const depth = profViva === 'inf' ? undefined : profViva === 'd14' ? 14 : 18;
+    const t = setTimeout(() => {
+      const eng = garantirEngine();
+      void eng.startLive(fen, { depth, onUpdate: (u) => setLiveInfo(u) });
+    }, 350);
+    return () => {
+      clearTimeout(t);
+      engineRef.current?.stopLive();
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [aoVivo, ativo, posicao.fen, posicao.fim, profViva]);
+
+  // Desliga a análise ao vivo ao sair da aba (libera o motor).
+  useEffect(() => {
+    if (!ativo && aoVivo) engineRef.current?.stopLive();
+  }, [ativo, aoVivo]);
 
   const carregarPgn = useCallback(() => {
     try {
@@ -187,9 +222,24 @@ export function Analise({ ativo, pgnInicial }: { ativo: boolean; pgnInicial?: st
     URL.revokeObjectURL(url);
   }, [sans]);
 
+  const alternarAoVivo = useCallback(() => {
+    setAoVivo((v) => {
+      const novo = !v;
+      if (!novo) {
+        engineRef.current?.stopLive();
+        setLiveInfo(null);
+      }
+      return novo;
+    });
+  }, []);
+
   const analisar = useCallback(async () => {
     if (sans.length === 0 || analisando) return;
     const eng = garantirEngine();
+    // A análise em lote e a ao vivo disputam o mesmo motor: desliga a ao vivo.
+    setAoVivo(false);
+    eng.stopLive();
+    setLiveInfo(null);
     setTocando(false);
     setAnalisando(true);
     setProgresso(0);
@@ -243,24 +293,38 @@ export function Analise({ ativo, pgnInicial }: { ativo: boolean; pgnInicial?: st
   const lanceAtual = relatorio && ply > 0 ? relatorio.lances[ply - 1] : undefined;
   const notaHist = jogo && ply > 0 ? jogo.notas[ply - 1] : undefined;
 
+  // Avaliação mostrada na barra/rótulo: ao vivo (se ligado) ou da análise em lote.
+  let avalExibida: number | null = null;
+  if (aoVivo && liveInfo) avalExibida = liveCpBrancas(liveInfo, posicao.brancasVez);
+  else if (relatorio) avalExibida = avalCorrente(relatorio, ply);
+
+  // Seta do melhor lance (só quando ligada e há análise ao vivo).
+  const shapes: DrawShape[] = [];
+  const pvUci = aoVivo && liveInfo?.pv?.length ? liveInfo.pv[0] : undefined;
+  if (setaMelhor && pvUci && pvUci.length >= 4) {
+    shapes.push({ orig: pvUci.slice(0, 2) as Key, dest: pvUci.slice(2, 4) as Key, brush: 'green' });
+  }
+  const linhaPv = aoVivo && liveInfo ? pvParaPtbr(posicao.fen, liveInfo.pv, 5) : '';
+
   return (
     <div className="ana-layout">
       <div className="board-col">
-        {relatorio && (
+        {avalExibida !== null && (
           <div className="ana-aval-ext">
-            <span className={'aval-num ' + sinalAval(avalCorrente(relatorio, ply))}>
-              {formatAval(avalCorrente(relatorio, ply))}
+            <span className={'aval-num ' + sinalAval(avalExibida)}>{formatAval(avalExibida)}</span>
+            <span className="aval-leg">
+              {aoVivo && liveInfo ? `ao vivo · prof. ${liveInfo.depth}` : 'avaliação (peões)'}
             </span>
-            <span className="aval-leg">avaliação (peões)</span>
           </div>
         )}
         <div className="ana-board-wrap">
-          {relatorio && <BarraAval cpBrancas={avalCorrente(relatorio, ply)} orient={orient} />}
+          {avalExibida !== null && <BarraAval cpBrancas={avalExibida} orient={orient} />}
           <Board
             fen={posicao.fen}
             orientation={orient}
             lastMove={posicao.lastMove}
             check={posicao.emXeque}
+            shapes={shapes}
             viewOnly
           />
         </div>
@@ -442,6 +506,61 @@ export function Analise({ ativo, pgnInicial }: { ativo: boolean; pgnInicial?: st
           </div>
         )}
 
+        <div className="ana-vivo">
+          <div className="ana-vivo-top">
+            <label className={'switch' + (!temPartida ? ' off' : '')}>
+              <input
+                type="checkbox"
+                checked={aoVivo}
+                onChange={alternarAoVivo}
+                disabled={!temPartida}
+              />
+              <span className="switch-tr" />
+              <span className="switch-tx">Análise ao vivo</span>
+            </label>
+            <select
+              className="prof-viva"
+              value={profViva}
+              onChange={(e) => setProfViva(e.target.value as typeof profViva)}
+              disabled={!aoVivo}
+              aria-label="Profundidade da análise ao vivo"
+            >
+              <option value="d14">Rápida (prof. 14)</option>
+              <option value="d18">Padrão (prof. 18)</option>
+              <option value="inf">Contínua (∞)</option>
+            </select>
+          </div>
+          {aoVivo && (
+            <>
+              <label className="switch sm">
+                <input
+                  type="checkbox"
+                  checked={setaMelhor}
+                  onChange={() => setSetaMelhor((v) => !v)}
+                />
+                <span className="switch-tr" />
+                <span className="switch-tx">Mostrar seta do melhor lance</span>
+              </label>
+              <div className="ana-vivo-info">
+                {posicao.fim ? (
+                  <span className="vivo-fim">Posição final — sem lances para calcular.</span>
+                ) : liveInfo ? (
+                  <>
+                    <span className="vivo-prof">prof. {liveInfo.depth}</span>
+                    {linhaPv && (
+                      <span className="vivo-pv">
+                        melhor linha: <strong>{linhaPv}</strong>
+                      </span>
+                    )}
+                  </>
+                ) : (
+                  <span className="vivo-calc">calculando…</span>
+                )}
+              </div>
+            </>
+          )}
+        </div>
+
         {relatorio && <Resumo relatorio={relatorio} />}
 
         <div className="ana-ajuda">
@@ -483,6 +602,38 @@ function lanceNumero(ply: number): string {
   const i = ply - 1;
   const n = Math.floor(i / 2) + 1;
   return i % 2 === 0 ? `${n}.` : `${n}...`;
+}
+
+/** Converte o score ao vivo (perspectiva da vez) para cp na ótica das brancas. */
+function liveCpBrancas(info: LiveInfo, brancasVez: boolean): number {
+  const score =
+    info.mate !== undefined
+      ? info.mate > 0
+        ? 100000 - info.mate * 100
+        : -100000 - info.mate * 100
+      : info.cp ?? 0;
+  return brancasVez ? score : -score;
+}
+
+/** Converte os primeiros lances da variante (UCI) para uma linha em PT-BR. */
+function pvParaPtbr(fen: string, pv: string[], max: number): string {
+  const c = new Chess(fen);
+  const out: string[] = [];
+  for (const uci of pv.slice(0, max)) {
+    if (uci.length < 4) break;
+    try {
+      const m = c.move({
+        from: uci.slice(0, 2),
+        to: uci.slice(2, 4),
+        promotion: uci.length > 4 ? uci.slice(4) : undefined,
+      });
+      if (!m) break;
+      out.push(sanParaPtBr(m.san));
+    } catch {
+      break;
+    }
+  }
+  return out.join(' ');
 }
 
 /** Avaliação (cp brancas) da posição mostrada no ply atual. */

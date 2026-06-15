@@ -4,6 +4,15 @@
 
 export type Nivel = 'basico' | 'intermediario' | 'profissional';
 
+/** Atualização da análise contínua (ao vivo). Score na perspectiva da vez. */
+export type LiveInfo = {
+  depth: number;
+  cp?: number;
+  mate?: number;
+  /** Variante principal em UCI (pv[0] é o melhor lance). */
+  pv: string[];
+};
+
 type ConfigNivel = {
   /** Rótulo amigável para a UI. */
   rotulo: string;
@@ -54,6 +63,10 @@ export class Engine {
   /** Última avaliação reportada pelo motor (perspectiva de quem tem a vez). */
   private ultimoCp?: number;
   private ultimoMate?: number;
+
+  /** Análise contínua (ao vivo): callback de atualização e estado. */
+  private liveOnUpdate?: (u: LiveInfo) => void;
+  private aoVivo = false;
 
   /** Mensagem do último erro do worker, para diagnóstico na UI. */
   erro?: string;
@@ -117,7 +130,7 @@ export class Engine {
       } else if (line === 'readyok') {
         this.resolvePronto();
       } else if (line.startsWith('info') && line.includes('score')) {
-        // Ex.: "info depth 12 ... score cp 34 ..." ou "score mate -3".
+        // Ex.: "info depth 12 ... score cp 34 ... pv e2e4 e7e5 ...".
         const mCp = line.match(/score cp (-?\d+)/);
         const mMate = line.match(/score mate (-?\d+)/);
         if (mCp) {
@@ -126,6 +139,17 @@ export class Engine {
         } else if (mMate) {
           this.ultimoMate = parseInt(mMate[1], 10);
           this.ultimoCp = undefined;
+        }
+        // Na análise ao vivo, repassamos cada atualização (profundidade, score, pv).
+        if (this.aoVivo && this.liveOnUpdate && line.includes(' pv ')) {
+          const mDepth = line.match(/depth (\d+)/);
+          const mPv = line.match(/ pv (.+)$/);
+          this.liveOnUpdate({
+            depth: mDepth ? parseInt(mDepth[1], 10) : 0,
+            cp: mCp ? parseInt(mCp[1], 10) : undefined,
+            mate: mMate ? parseInt(mMate[1], 10) : undefined,
+            pv: mPv ? mPv[1].trim().split(/\s+/) : [],
+          });
         }
       } else if (line.startsWith('bestmove')) {
         const uci = line.split(' ')[1];
@@ -171,6 +195,33 @@ export class Engine {
     this.ultimoMate = undefined;
     const best = await this.go(fen, movetimeMs);
     return { best, cp: this.ultimoCp, mate: this.ultimoMate };
+  }
+
+  /**
+   * Análise CONTÍNUA da posição (Módulo 1 do roteiro): o motor calcula sem parar
+   * (ou até a profundidade dada) e chama `onUpdate` a cada melhora. Use `stopLive`
+   * antes de trocar de posição. Força máxima (Skill 20) para avaliação fiel.
+   */
+  async startLive(
+    fen: string,
+    opts: { depth?: number; onUpdate: (u: LiveInfo) => void },
+  ): Promise<void> {
+    await this.pronto;
+    this.stopLive();
+    this.send('setoption name Skill Level value 20');
+    this.aoVivo = true;
+    this.liveOnUpdate = opts.onUpdate;
+    this.send(`position fen ${fen}`);
+    if (opts.depth && opts.depth > 0) this.send(`go depth ${opts.depth}`);
+    else this.send('go infinite');
+  }
+
+  /** Interrompe a análise contínua, se houver. */
+  stopLive(): void {
+    if (!this.aoVivo) return;
+    this.aoVivo = false;
+    this.liveOnUpdate = undefined;
+    this.send('stop');
   }
 
   private go(fen: string, movetimeMs: number): Promise<string> {

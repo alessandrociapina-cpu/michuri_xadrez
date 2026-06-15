@@ -59,7 +59,7 @@ export function Board({
     const config: Config = {
       fen,
       orientation,
-      coordinates: true,
+      coordinates: false, // usamos coordenadas próprias, na margem (mais legíveis)
       viewOnly,
       turnColor: movableColor ?? 'white',
       check,
@@ -106,9 +106,29 @@ export function Board({
     });
   }, [fen, orientation, movableColor, dests, lastMove, check, viewOnly, syncSignal]);
 
+  // Coordenadas próprias, na margem do tabuleiro (alto contraste, fora das casas).
+  const files = orientation === 'white'
+    ? ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h']
+    : ['h', 'g', 'f', 'e', 'd', 'c', 'b', 'a'];
+  const ranks = orientation === 'white'
+    ? ['8', '7', '6', '5', '4', '3', '2', '1']
+    : ['1', '2', '3', '4', '5', '6', '7', '8'];
+
   return (
-    <div className="board-frame">
-      <div ref={elRef} className="cg-host" />
+    <div className="board-outer">
+      <div className="coord-ranks" aria-hidden="true">
+        {ranks.map((r) => (
+          <span key={r}>{r}</span>
+        ))}
+      </div>
+      <div className="board-frame">
+        <div ref={elRef} className="cg-host" />
+      </div>
+      <div className="coord-files" aria-hidden="true">
+        {files.map((f) => (
+          <span key={f}>{f}</span>
+        ))}
+      </div>
     </div>
   );
 }

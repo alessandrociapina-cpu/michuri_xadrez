@@ -2,20 +2,23 @@ import { useState } from 'react';
 import { Play } from './features/play/Play';
 import { Trainer } from './features/openings/Trainer';
 import { Michuri } from './components/Michuri';
+import { Splash } from './components/Splash';
 import './App.css';
 
 type Aba = 'jogar' | 'aberturas';
 
 export function App() {
   const [aba, setAba] = useState<Aba>('jogar');
+  const [splash, setSplash] = useState(true);
 
   return (
     <div className="app-wrap">
+      {splash && <Splash onDone={() => setSplash(false)} />}
       <header className="app-top">
         <div className="brand">
           <Michuri className="brand-cat" />
           <div>
-            <div className="eyebrow">Michuri · Xadrez</div>
+            <div className="eyebrow">Xadrez do Michuri</div>
             <h1 className="app-title">
               Jogue & <em>estude</em>
             </h1>

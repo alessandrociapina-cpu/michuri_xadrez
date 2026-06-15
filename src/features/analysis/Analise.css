@@ -186,6 +186,76 @@
   border-style: dashed;
 }
 
+/* ---- nota histórica da partida (abaixo do tabuleiro) ---- */
+.ana-nota-hist {
+  margin-top: 12px;
+  padding: 12px 14px;
+  border-radius: 8px;
+  background: var(--ink-2);
+  border: 1px solid var(--line);
+  border-left: 3px solid var(--gold);
+}
+.ana-nota-hist .nota-mv {
+  display: block;
+  font-family: 'JetBrains Mono', monospace;
+  font-weight: 700;
+  color: var(--gold);
+  font-size: 14px;
+  margin-bottom: 4px;
+}
+.ana-nota-hist p {
+  font-size: 14px;
+  line-height: 1.65;
+  color: #ddd3bc;
+}
+.ana-nota-hist.intro {
+  border-left-color: var(--muted);
+}
+.ana-nota-hist .nota-dica {
+  display: block;
+  margin-top: 8px;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+  color: var(--muted);
+}
+
+/* ---- seletor de partidas famosas + ficha ---- */
+.ana-famosas {
+  display: flex;
+  flex-direction: column;
+}
+.ficha-jogo {
+  background: linear-gradient(180deg, var(--ink-2), rgba(32, 27, 20, 0.4));
+  border: 1px solid var(--line);
+  border-left: 3px solid var(--gold);
+  border-radius: 10px;
+  padding: 12px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.ficha-titulo {
+  font-family: 'Fraunces', serif;
+  font-weight: 600;
+  font-size: 18px;
+  color: var(--bone);
+}
+.ficha-jogadores {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  font-size: 13px;
+}
+.ficha-jogadores .fj-vs {
+  color: var(--muted);
+}
+.ficha-meta {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
 .ana-acoes {
   display: flex;
   gap: 8px;

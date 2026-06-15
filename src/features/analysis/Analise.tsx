@@ -14,6 +14,7 @@ import {
 } from '../../core/analysis';
 import { miar, estaMudo, setMudo } from '../../core/meow';
 import { sanParaPtBr } from '../../core/notation';
+import { PARTIDAS_FAMOSAS, type JogoFamoso } from './famousGames';
 import './Analise.css';
 
 type Profundidade = 'rapida' | 'padrao' | 'profunda';
@@ -46,6 +47,7 @@ export function Analise({ ativo, pgnInicial }: { ativo: boolean; pgnInicial?: st
 
   const [mudo, setMudoLocal] = useState(estaMudo());
   const [ajuda, setAjuda] = useState(false);
+  const [jogo, setJogo] = useState<JogoFamoso | null>(null);
 
   // Reprodução automática.
   const [tocando, setTocando] = useState(false);
@@ -78,12 +80,29 @@ export function Analise({ ativo, pgnInicial }: { ativo: boolean; pgnInicial?: st
       setSans(s);
       setPly(s.length);
       setRelatorio(null);
+      setJogo(null);
       setAviso(undefined);
       setMostrarImport(false);
     } catch {
       /* PGN da própria aba é confiável; ignora falhas silenciosamente */
     }
   }, [pgnInicial]);
+
+  // Carrega uma partida histórica pré-cadastrada para estudo.
+  const carregarFamosa = useCallback((id: string) => {
+    const g = PARTIDAS_FAMOSAS.find((j) => j.id === id) ?? null;
+    if (!g) {
+      setJogo(null);
+      return;
+    }
+    setJogo(g);
+    setSans(g.sans);
+    setPly(0);
+    setRelatorio(null);
+    setAviso(undefined);
+    setMostrarImport(false);
+    setTocando(false);
+  }, []);
 
   const posicao = useMemo(() => {
     const c = new Chess();
@@ -135,6 +154,7 @@ export function Analise({ ativo, pgnInicial }: { ativo: boolean; pgnInicial?: st
       setSans(s);
       setPly(s.length);
       setRelatorio(null);
+      setJogo(null);
       setAviso(undefined);
       setMostrarImport(false);
       setTocando(false);
@@ -221,6 +241,7 @@ export function Analise({ ativo, pgnInicial }: { ativo: boolean; pgnInicial?: st
 
   const temPartida = sans.length > 0;
   const lanceAtual = relatorio && ply > 0 ? relatorio.lances[ply - 1] : undefined;
+  const notaHist = jogo && ply > 0 ? jogo.notas[ply - 1] : undefined;
 
   return (
     <div className="ana-layout">
@@ -299,6 +320,21 @@ export function Analise({ ativo, pgnInicial }: { ativo: boolean; pgnInicial?: st
               )}
           </div>
         )}
+
+        {jogo && notaHist && (
+          <div className="ana-nota-hist">
+            <span className="nota-mv">
+              {lanceNumero(ply)} {sanParaPtBr(sans[ply - 1])}
+            </span>
+            <p>{notaHist}</p>
+          </div>
+        )}
+        {jogo && ply === 0 && (
+          <div className="ana-nota-hist intro">
+            <p>{jogo.resumo}</p>
+            <span className="nota-dica">Use ▶ ou as setas para avançar lance a lance.</span>
+          </div>
+        )}
       </div>
 
       <div className="panel">
@@ -316,6 +352,26 @@ export function Analise({ ativo, pgnInicial }: { ativo: boolean; pgnInicial?: st
             {mudo ? '🔇' : '🔊'}
           </button>
         </div>
+
+        <div className="ana-famosas">
+          <label className="lbl" htmlFor="famosa">
+            🏆 Estudar uma partida histórica
+          </label>
+          <select
+            id="famosa"
+            value={jogo?.id ?? ''}
+            onChange={(e) => carregarFamosa(e.target.value)}
+          >
+            <option value="">— escolha uma partida famosa —</option>
+            {PARTIDAS_FAMOSAS.map((g) => (
+              <option key={g.id} value={g.id}>
+                {g.titulo} ({g.ano})
+              </option>
+            ))}
+          </select>
+        </div>
+
+        {jogo && <FichaJogo jogo={jogo} />}
 
         <div className="ana-acoes">
           <button className="btn" onClick={() => setMostrarImport((v) => !v)}>
@@ -422,6 +478,13 @@ export function Analise({ ativo, pgnInicial }: { ativo: boolean; pgnInicial?: st
   );
 }
 
+/** Rótulo "12." (brancas) ou "12..." (pretas) para o lance no índice ply-1. */
+function lanceNumero(ply: number): string {
+  const i = ply - 1;
+  const n = Math.floor(i / 2) + 1;
+  return i % 2 === 0 ? `${n}.` : `${n}...`;
+}
+
 /** Avaliação (cp brancas) da posição mostrada no ply atual. */
 function avalCorrente(rel: Relatorio, ply: number): number {
   if (ply === 0) return rel.lances[0]?.avalAntesBrancas ?? 0;
@@ -456,6 +519,24 @@ function BarraAval({ cpBrancas, orient }: { cpBrancas: number; orient: Orientaca
   return (
     <div className="barra-aval" title={`Avaliação: ${formatAval(cpBrancas)}`}>
       <div className="barra-branca" style={estilo} />
+    </div>
+  );
+}
+
+function FichaJogo({ jogo }: { jogo: JogoFamoso }) {
+  return (
+    <div className="ficha-jogo">
+      <div className="ficha-titulo">{jogo.titulo}</div>
+      <div className="ficha-jogadores">
+        <span className="fj-b">⬜ {jogo.brancas}</span>
+        <span className="fj-vs">×</span>
+        <span className="fj-p">⬛ {jogo.pretas}</span>
+      </div>
+      <div className="ficha-meta">
+        <span className="tag">{jogo.evento}</span>
+        <span className="tag">{jogo.ano}</span>
+        <span className="tag eco">{jogo.resultado}</span>
+      </div>
     </div>
   );
 }

@@ -7,7 +7,7 @@ export function Splash({ onDone }: { onDone: () => void }) {
   const [fechando, setFechando] = useState(false);
 
   useEffect(() => {
-    const t = setTimeout(() => setFechando(true), 2800);
+    const t = setTimeout(() => setFechando(true), 8000);
     return () => clearTimeout(t);
   }, []);
 

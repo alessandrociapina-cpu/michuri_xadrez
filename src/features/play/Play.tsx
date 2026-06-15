@@ -303,7 +303,7 @@ export function Play({
 
         <p className="rodape">
           Atual: <strong>{NIVEIS[nivel].rotulo}</strong>
-          {numLance > 0 && <> · lance {numLance}</>} · tecla <code>N</code> inicia nova partida.
+          {numLance > 0 && <> · lance {numLance}</>}
         </p>
       </div>
     </div>

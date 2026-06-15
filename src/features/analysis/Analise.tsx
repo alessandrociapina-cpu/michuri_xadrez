@@ -45,6 +45,7 @@ export function Analise({ ativo, pgnInicial }: { ativo: boolean; pgnInicial?: st
   const [copiado, setCopiado] = useState(false);
 
   const [mudo, setMudoLocal] = useState(estaMudo());
+  const [ajuda, setAjuda] = useState(false);
 
   // Reprodução automática.
   const [tocando, setTocando] = useState(false);
@@ -224,6 +225,14 @@ export function Analise({ ativo, pgnInicial }: { ativo: boolean; pgnInicial?: st
   return (
     <div className="ana-layout">
       <div className="board-col">
+        {relatorio && (
+          <div className="ana-aval-ext">
+            <span className={'aval-num ' + sinalAval(avalCorrente(relatorio, ply))}>
+              {formatAval(avalCorrente(relatorio, ply))}
+            </span>
+            <span className="aval-leg">avaliação (peões)</span>
+          </div>
+        )}
         <div className="ana-board-wrap">
           {relatorio && <BarraAval cpBrancas={avalCorrente(relatorio, ply)} orient={orient} />}
           <Board
@@ -379,6 +388,18 @@ export function Analise({ ativo, pgnInicial }: { ativo: boolean; pgnInicial?: st
 
         {relatorio && <Resumo relatorio={relatorio} />}
 
+        <div className="ana-ajuda">
+          <button
+            className="ana-ajuda-tog"
+            onClick={() => setAjuda((v) => !v)}
+            aria-expanded={ajuda}
+          >
+            <span>Como ler a pontuação</span>
+            <span className={'chev' + (ajuda ? ' on' : '')}>▾</span>
+          </button>
+          {ajuda && <Legenda />}
+        </div>
+
         <div>
           <span className="lbl">Lances</span>
           <ListaLances
@@ -408,9 +429,19 @@ function avalCorrente(rel: Relatorio, ply: number): number {
 }
 
 function formatAval(cpBrancas: number): string {
-  if (Math.abs(cpBrancas) >= 20000) return cpBrancas > 0 ? '+M' : '−M';
+  if (Math.abs(cpBrancas) >= 20000) {
+    // Mate forçado: + a favor das brancas, − a favor das pretas.
+    return cpBrancas > 0 ? '+M' : '−M';
+  }
   const v = cpBrancas / 100;
   return (v > 0 ? '+' : v < 0 ? '−' : '') + Math.abs(v).toFixed(1);
+}
+
+function sinalAval(cpBrancas: number): string {
+  if (Math.abs(cpBrancas) >= 20000) return cpBrancas > 0 ? 'mate-pos' : 'mate-neg';
+  if (cpBrancas > 30) return 'pos';
+  if (cpBrancas < -30) return 'neg';
+  return 'neutro';
 }
 
 function BarraAval({ cpBrancas, orient }: { cpBrancas: number; orient: Orientacao }) {
@@ -425,7 +456,58 @@ function BarraAval({ cpBrancas, orient }: { cpBrancas: number; orient: Orientaca
   return (
     <div className="barra-aval" title={`Avaliação: ${formatAval(cpBrancas)}`}>
       <div className="barra-branca" style={estilo} />
-      <span className={'barra-num' + (cpBrancas >= 0 ? ' pos' : ' neg')}>{formatAval(cpBrancas)}</span>
+    </div>
+  );
+}
+
+function Legenda() {
+  const classes: Classe[] = [
+    'brilhante',
+    'melhor',
+    'bom',
+    'livro',
+    'ok',
+    'impreciso',
+    'erro',
+    'errograve',
+  ];
+  return (
+    <div className="legenda">
+      <p className="legenda-int">
+        A avaliação mostra quem está melhor, medida em <strong>peões</strong>. O número é sempre do
+        ponto de vista das <strong>brancas</strong>.
+      </p>
+      <ul className="legenda-lista">
+        <li>
+          <span className="leg-val pos">+1.5</span> as brancas estão melhor por ~1,5 peão de
+          vantagem (material ou posição).
+        </li>
+        <li>
+          <span className="leg-val neg">−1.6</span> as pretas estão melhor por ~1,6 peão.
+        </li>
+        <li>
+          <span className="leg-val neutro">0.0</span> posição equilibrada.
+        </li>
+        <li>
+          <span className="leg-val mate-pos">+M</span> mate forçado a favor das brancas;{' '}
+          <span className="leg-val mate-neg">−M</span> a favor das pretas.
+        </li>
+      </ul>
+      <p className="legenda-int">
+        A barra ao lado do tabuleiro mostra o mesmo: quanto mais <strong>branca</strong>, melhor
+        para as brancas. Cada lance recebe uma classificação:
+      </p>
+      <div className="legenda-classes">
+        {classes.map((c) => (
+          <span key={c} className={'leg-classe c-' + c}>
+            <b>{SIMBOLO_CLASSE[c] || '·'}</b> {ROTULO_CLASSE[c]}
+          </span>
+        ))}
+      </div>
+      <p className="legenda-int peq">
+        Brilhante e Melhor/Bom fazem o Michuri miar (1×, ou 2× se for brilhante). Imprecisão, Erro
+        e Erro grave indicam onde a vantagem foi perdida.
+      </p>
     </div>
   );
 }

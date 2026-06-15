@@ -13,15 +13,59 @@
 .ana-board-wrap {
   position: relative;
   display: flex;
-  gap: 8px;
+  align-items: stretch;
+  gap: 10px;
+}
+/* O tabuleiro deve preencher a coluna (mesmo tamanho dos outros módulos);
+   sem isto, como filho flex ele encolhe para o tamanho do conteúdo. */
+.ana-board-wrap .board-outer {
+  flex: 1 1 auto;
+  min-width: 0;
 }
 
-/* ---- barra de avaliação ---- */
+/* ---- rótulo da avaliação, EXTERNO à barra e com cor vibrante ---- */
+.ana-aval-ext {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+.aval-num {
+  font-family: 'JetBrains Mono', monospace;
+  font-weight: 700;
+  font-size: 26px;
+  letter-spacing: 0.01em;
+  line-height: 1;
+}
+.aval-num.pos {
+  color: #f4d57a;
+}
+.aval-num.neg {
+  color: #ff8a5c;
+}
+.aval-num.neutro {
+  color: var(--bone);
+}
+.aval-num.mate-pos {
+  color: #6ee7c8;
+}
+.aval-num.mate-neg {
+  color: #ff7a9c;
+}
+.aval-leg {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+/* ---- barra de avaliação (só a barra; o número fica externo) ---- */
 .barra-aval {
   position: relative;
-  width: 16px;
+  width: 15px;
   flex: none;
-  border-radius: 5px;
+  border-radius: 6px;
   background: #14110b;
   border: 1px solid var(--line);
   overflow: hidden;
@@ -32,25 +76,6 @@
   right: 0;
   background: linear-gradient(180deg, #f1ead7, #cbc2a6);
   transition: height 0.35s ease;
-}
-.barra-num {
-  position: absolute;
-  left: 50%;
-  bottom: 4px;
-  transform: translateX(-50%);
-  font-family: 'JetBrains Mono', monospace;
-  font-size: 9px;
-  font-weight: 700;
-  writing-mode: vertical-rl;
-  letter-spacing: 0.06em;
-}
-.barra-num.pos {
-  color: #2a241a;
-  top: 4px;
-  bottom: auto;
-}
-.barra-num.neg {
-  color: var(--bone);
 }
 
 /* ---- controles de navegação ---- */
@@ -408,6 +433,108 @@
 }
 .ana-lance-atual.c-errograve {
   border-left-color: #e0603f;
+}
+
+/* ---- "Como ler a pontuação" (colapsável) ---- */
+.ana-ajuda {
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--ink-2);
+  overflow: hidden;
+}
+.ana-ajuda-tog {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  background: transparent;
+  border: none;
+  color: var(--bone);
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 13px;
+  padding: 12px 14px;
+  cursor: pointer;
+}
+.ana-ajuda-tog:hover {
+  color: var(--gold);
+}
+.ana-ajuda-tog .chev {
+  transition: transform 0.18s ease;
+  color: var(--gold);
+}
+.ana-ajuda-tog .chev.on {
+  transform: rotate(180deg);
+}
+.legenda {
+  padding: 4px 14px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.legenda-int {
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--muted);
+}
+.legenda-int.peq {
+  font-size: 12px;
+}
+.legenda-int strong {
+  color: var(--bone);
+}
+.legenda-lista {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--muted);
+}
+.leg-val {
+  display: inline-block;
+  min-width: 42px;
+  text-align: center;
+  font-family: 'JetBrains Mono', monospace;
+  font-weight: 700;
+  font-size: 13px;
+  padding: 2px 6px;
+  border-radius: 5px;
+  margin-right: 8px;
+  background: #14110b;
+}
+.leg-val.pos {
+  color: #f4d57a;
+}
+.leg-val.neg {
+  color: #ff8a5c;
+}
+.leg-val.neutro {
+  color: var(--bone);
+}
+.leg-val.mate-pos {
+  color: #6ee7c8;
+}
+.leg-val.mate-neg {
+  color: #ff7a9c;
+}
+.legenda-classes {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.leg-classe {
+  font-size: 12px;
+  color: var(--muted);
+  background: #14110b;
+  border: 1px solid var(--line);
+  border-radius: 99px;
+  padding: 4px 10px;
+}
+.leg-classe b {
+  font-family: 'JetBrains Mono', monospace;
+  margin-right: 4px;
 }
 
 .rodape {

@@ -222,6 +222,25 @@ export function Analise({ ativo, pgnInicial }: { ativo: boolean; pgnInicial?: st
     URL.revokeObjectURL(url);
   }, [sans]);
 
+  // Navegação orientada a erros: pula para a próxima (ou anterior) imprecisão/erro.
+  const irParaErro = useCallback(
+    (dir: 1 | -1) => {
+      if (!relatorio) return;
+      const ruins = new Set<Classe>(['impreciso', 'erro', 'errograve']);
+      const ls = relatorio.lances;
+      if (dir === 1) {
+        for (let i = ply; i < ls.length; i++) {
+          if (ruins.has(ls[i].classe)) return irPara(i + 1, false);
+        }
+      } else {
+        for (let i = ply - 2; i >= 0; i--) {
+          if (ruins.has(ls[i].classe)) return irPara(i + 1, false);
+        }
+      }
+    },
+    [relatorio, ply, irPara],
+  );
+
   const alternarAoVivo = useCallback(() => {
     setAoVivo((v) => {
       const novo = !v;
@@ -563,6 +582,25 @@ export function Analise({ ativo, pgnInicial }: { ativo: boolean; pgnInicial?: st
 
         {relatorio && <Resumo relatorio={relatorio} />}
 
+        {relatorio && relatorio.lances.length > 1 && (
+          <div className="ana-grafico-bloco">
+            <div className="grafico-head">
+              <span className="lbl" style={{ margin: 0 }}>
+                Vantagem ao longo da partida
+              </span>
+              <div className="erro-nav">
+                <button className="btn mini" onClick={() => irParaErro(-1)} title="Erro anterior">
+                  ◀ erro
+                </button>
+                <button className="btn mini" onClick={() => irParaErro(1)} title="Próximo erro">
+                  erro ▶
+                </button>
+              </div>
+            </div>
+            <GraficoVantagem lances={relatorio.lances} ply={ply} onIr={(p) => irPara(p, false)} />
+          </div>
+        )}
+
         <div className="ana-ajuda">
           <button
             className="ana-ajuda-tog"
@@ -741,6 +779,51 @@ function Legenda() {
         e Erro grave indicam onde a vantagem foi perdida.
       </p>
     </div>
+  );
+}
+
+function GraficoVantagem({
+  lances,
+  ply,
+  onIr,
+}: {
+  lances: Relatorio['lances'];
+  ply: number;
+  onIr: (ply: number) => void;
+}) {
+  const n = lances.length;
+  const W = Math.max(1, n);
+  const H = 100;
+  const wp = (cp: number) => {
+    const v = 2 / (1 + Math.exp(-0.00368208 * cp)) - 1;
+    return 50 + 50 * v; // 0 (pretas ganhando) .. 100 (brancas ganhando)
+  };
+  let d = `M 0 ${H}`;
+  lances.forEach((l, i) => {
+    const y = H - wp(l.avalDepoisBrancas);
+    d += ` L ${i + 0.5} ${y.toFixed(2)}`;
+  });
+  d += ` L ${W} ${H} Z`;
+  const markerX = Math.max(0, Math.min(W, ply));
+  const onClick = (e: React.MouseEvent<SVGSVGElement>) => {
+    const r = e.currentTarget.getBoundingClientRect();
+    const x = (e.clientX - r.left) / r.width;
+    onIr(Math.max(0, Math.min(n, Math.round(x * n))));
+  };
+  return (
+    <svg
+      className="grafico"
+      viewBox={`0 0 ${W} ${H}`}
+      preserveAspectRatio="none"
+      onClick={onClick}
+      role="img"
+      aria-label="Gráfico de vantagem da partida"
+    >
+      <rect x="0" y="0" width={W} height={H / 2} className="g-top" />
+      <path d={d} className="g-area" />
+      <line x1="0" y1={H / 2} x2={W} y2={H / 2} className="g-mid" />
+      <line x1={markerX} y1="0" x2={markerX} y2={H} className="g-marker" />
+    </svg>
   );
 }
 

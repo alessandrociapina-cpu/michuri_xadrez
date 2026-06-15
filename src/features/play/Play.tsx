@@ -13,6 +13,7 @@ import {
 import { Engine, NIVEIS, type Nivel } from '../../core/engine';
 import { sanParaPtBr } from '../../core/notation';
 import { detectarAbertura } from '../../core/openingDetect';
+import { gerarPgn } from '../../core/pgn';
 import './Play.css';
 
 type Lado = 'white' | 'black';
@@ -21,7 +22,13 @@ type Lado = 'white' | 'black';
 // escolhe a peça.
 type PromocaoPendente = { from: Key; to: Key };
 
-export function Play({ ativo }: { ativo: boolean }) {
+export function Play({
+  ativo,
+  onAnalisar,
+}: {
+  ativo: boolean;
+  onAnalisar?: (pgn: string) => void;
+}) {
   const chessRef = useRef<Chess>(new Chess());
   const engineRef = useRef<Engine | null>(null);
 
@@ -34,6 +41,7 @@ export function Play({ ativo }: { ativo: boolean }) {
   const [fimMsg, setFimMsg] = useState<string | undefined>();
   const [promo, setPromo] = useState<PromocaoPendente | null>(null);
   const [erroMotor, setErroMotor] = useState<string | undefined>();
+  const [copiado, setCopiado] = useState(false);
 
   // Cria o motor uma vez e ajusta o nível inicial.
   useEffect(() => {
@@ -154,6 +162,24 @@ export function Play({ ativo }: { ativo: boolean }) {
     sincronizar();
   }, [pensando, sincronizar]);
 
+  // Copia o PGN da partida atual para a área de transferência.
+  const copiarPgn = useCallback(async () => {
+    const pgn = gerarPgn(sanHist, { White: lado === 'white' ? 'Você' : 'Michuri', Black: lado === 'white' ? 'Michuri' : 'Você' });
+    try {
+      await navigator.clipboard.writeText(pgn);
+      setCopiado(true);
+      setTimeout(() => setCopiado(false), 1800);
+    } catch {
+      /* clipboard indisponível — sem ação */
+    }
+  }, [sanHist, lado]);
+
+  // Envia a partida atual para a aba de Análise.
+  const analisarPartida = useCallback(() => {
+    const pgn = gerarPgn(sanHist, { White: lado === 'white' ? 'Você' : 'Michuri', Black: lado === 'white' ? 'Michuri' : 'Você' });
+    onAnalisar?.(pgn);
+  }, [sanHist, lado, onAnalisar]);
+
   // Atalho de teclado: "n" para nova partida quando o módulo está ativo.
   useEffect(() => {
     if (!ativo) return;
@@ -246,6 +272,15 @@ export function Play({ ativo }: { ativo: boolean }) {
           </button>
           <button className="btn" onClick={desfazer} disabled={pensando || sanHist.length < 2}>
             Desfazer
+          </button>
+        </div>
+
+        <div className="actions">
+          <button className="btn" onClick={copiarPgn} disabled={sanHist.length === 0}>
+            {copiado ? '✓ PGN copiado' : 'Copiar PGN'}
+          </button>
+          <button className="btn" onClick={analisarPartida} disabled={sanHist.length === 0}>
+            Analisar partida
           </button>
         </div>
 

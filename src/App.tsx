@@ -1,15 +1,23 @@
-import { useState } from 'react';
+import { useCallback, useState } from 'react';
 import { Play } from './features/play/Play';
 import { Trainer } from './features/openings/Trainer';
+import { Analise } from './features/analysis/Analise';
 import { Michuri } from './components/Michuri';
 import { Splash } from './components/Splash';
 import './App.css';
 
-type Aba = 'jogar' | 'aberturas';
+type Aba = 'jogar' | 'aberturas' | 'analise';
 
 export function App() {
   const [aba, setAba] = useState<Aba>('jogar');
   const [splash, setSplash] = useState(true);
+  // PGN enviado da aba Jogar para a aba Análise.
+  const [pgnAnalise, setPgnAnalise] = useState<string | undefined>();
+
+  const enviarParaAnalise = useCallback((pgn: string) => {
+    setPgnAnalise(pgn);
+    setAba('analise');
+  }, []);
 
   return (
     <div className="app-wrap">
@@ -39,17 +47,27 @@ export function App() {
           >
             Aberturas
           </button>
+          <button
+            className={'navbtn' + (aba === 'analise' ? ' on' : '')}
+            onClick={() => setAba('analise')}
+            aria-pressed={aba === 'analise'}
+          >
+            Análise
+          </button>
         </nav>
       </header>
 
       <main className="app-main">
-        {/* Mantemos as duas telas montadas para preservar o estado (partida em
-            andamento, posição estudada) ao alternar entre os módulos. */}
+        {/* Mantemos as telas montadas para preservar o estado (partida em
+            andamento, posição estudada, análise) ao alternar entre os módulos. */}
         <section hidden={aba !== 'jogar'} aria-hidden={aba !== 'jogar'}>
-          <Play ativo={aba === 'jogar'} />
+          <Play ativo={aba === 'jogar'} onAnalisar={enviarParaAnalise} />
         </section>
         <section hidden={aba !== 'aberturas'} aria-hidden={aba !== 'aberturas'}>
           <Trainer ativo={aba === 'aberturas'} />
+        </section>
+        <section hidden={aba !== 'analise'} aria-hidden={aba !== 'analise'}>
+          <Analise ativo={aba === 'analise'} pgnInicial={pgnAnalise} />
         </section>
       </main>
     </div>

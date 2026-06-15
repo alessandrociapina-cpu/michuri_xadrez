@@ -505,6 +505,123 @@
   border-left-color: #e0603f;
 }
 
+/* ---- base de dados Lichess (Módulo 2) ---- */
+.ana-nuvem {
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--ink-2);
+  overflow: hidden;
+}
+.nuvem-corpo {
+  padding: 4px 14px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.nuvem-erro {
+  color: var(--rust);
+  font-size: 13px;
+}
+.nuvem-carreg {
+  font-size: 13px;
+  color: var(--muted);
+  font-style: italic;
+}
+.nuvem-eval {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+}
+.nuvem-eval-num {
+  font-family: 'JetBrains Mono', monospace;
+  font-weight: 700;
+  font-size: 18px;
+  color: var(--gold);
+}
+.nuvem-eval-prof {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+  color: var(--muted);
+}
+.nuvem-sub {
+  font-size: 12px;
+  color: var(--muted);
+}
+.nuvem-lances {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.nuvem-lance {
+  display: grid;
+  grid-template-columns: 48px 1fr 52px;
+  align-items: center;
+  gap: 8px;
+}
+.nl-san {
+  font-family: 'JetBrains Mono', monospace;
+  font-weight: 600;
+  font-size: 13px;
+}
+.nl-barra {
+  display: flex;
+  height: 16px;
+  border-radius: 4px;
+  overflow: hidden;
+  background: var(--ink-3);
+}
+.nlb {
+  height: 100%;
+}
+.nlb.w {
+  background: #e7ddc4;
+}
+.nlb.d {
+  background: #8a8068;
+}
+.nlb.b {
+  background: #2a241a;
+}
+.nl-jogos {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+  color: var(--muted);
+  text-align: right;
+}
+.nuvem-partidas {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+.nuvem-partida {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  font-size: 13px;
+}
+.np-res {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+  color: var(--gold);
+  flex: none;
+}
+.np-nomes {
+  color: var(--bone);
+}
+.np-ano {
+  margin-left: auto;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+  color: var(--muted);
+}
+.nuvem-credito {
+  font-size: 10px;
+  color: var(--muted);
+  letter-spacing: 0.04em;
+  border-top: 1px solid var(--line);
+  padding-top: 8px;
+}
+
 /* ---- gráfico de vantagem + navegação por erros ---- */
 .ana-grafico-bloco {
   display: flex;

@@ -50,6 +50,15 @@ export function Analise({ ativo, pgnInicial }: { ativo: boolean; pgnInicial?: st
   const [ajuda, setAjuda] = useState(false);
   const [jogo, setJogo] = useState<JogoFamoso | null>(null);
 
+  // Base de dados Lichess (Módulo 2): explorer de mestres + avaliação em nuvem.
+  const [nuvemAberta, setNuvemAberta] = useState(false);
+  const [nuvem, setNuvem] = useState<{
+    explorer?: import('../../core/lichess').ExplorerResultado;
+    cloud?: import('../../core/lichess').CloudEval | null;
+  } | null>(null);
+  const [nuvemErro, setNuvemErro] = useState<string | undefined>();
+  const [nuvemCarregando, setNuvemCarregando] = useState(false);
+
   // Análise ao vivo (Módulo 1): avalia continuamente a posição mostrada.
   const [aoVivo, setAoVivo] = useState(false);
   const [liveInfo, setLiveInfo] = useState<LiveInfo | null>(null);
@@ -182,6 +191,41 @@ export function Analise({ ativo, pgnInicial }: { ativo: boolean; pgnInicial?: st
   useEffect(() => {
     if (!ativo && aoVivo) engineRef.current?.stopLive();
   }, [ativo, aoVivo]);
+
+  // Consulta a base do Lichess para a posição atual (quando o painel está aberto).
+  useEffect(() => {
+    if (!nuvemAberta || !ativo) return;
+    const fen = posicao.fen;
+    const ctrl = new AbortController();
+    setNuvemErro(undefined);
+    setNuvemCarregando(true);
+    const t = setTimeout(async () => {
+      try {
+        const [exp, cloud] = await Promise.all([
+          import('../../core/lichess').then((m) => m.buscarExplorer(fen, ctrl.signal)),
+          import('../../core/lichess')
+            .then((m) => m.buscarCloudEval(fen, ctrl.signal))
+            .catch(() => null),
+        ]);
+        if (!ctrl.signal.aborted) setNuvem({ explorer: exp, cloud });
+      } catch (e) {
+        if (!ctrl.signal.aborted) {
+          setNuvem(null);
+          setNuvemErro(
+            (e as Error).name === 'AbortError'
+              ? undefined
+              : 'Sem conexão com o Lichess (recurso disponível apenas online).',
+          );
+        }
+      } finally {
+        if (!ctrl.signal.aborted) setNuvemCarregando(false);
+      }
+    }, 400);
+    return () => {
+      clearTimeout(t);
+      ctrl.abort();
+    };
+  }, [nuvemAberta, ativo, posicao.fen]);
 
   const carregarPgn = useCallback(() => {
     try {
@@ -601,6 +645,27 @@ export function Analise({ ativo, pgnInicial }: { ativo: boolean; pgnInicial?: st
           </div>
         )}
 
+        {temPartida && (
+          <div className="ana-nuvem">
+            <button
+              className="ana-ajuda-tog"
+              onClick={() => setNuvemAberta((v) => !v)}
+              aria-expanded={nuvemAberta}
+            >
+              <span>☁️ Base de dados Lichess (online)</span>
+              <span className={'chev' + (nuvemAberta ? ' on' : '')}>▾</span>
+            </button>
+            {nuvemAberta && (
+              <NuvemPanel
+                dados={nuvem}
+                carregando={nuvemCarregando}
+                erro={nuvemErro}
+                fim={posicao.fim}
+              />
+            )}
+          </div>
+        )}
+
         <div className="ana-ajuda">
           <button
             className="ana-ajuda-tog"
@@ -708,6 +773,102 @@ function BarraAval({ cpBrancas, orient }: { cpBrancas: number; orient: Orientaca
   return (
     <div className="barra-aval" title={`Avaliação: ${formatAval(cpBrancas)}`}>
       <div className="barra-branca" style={estilo} />
+    </div>
+  );
+}
+
+function NuvemPanel({
+  dados,
+  carregando,
+  erro,
+  fim,
+}: {
+  dados: {
+    explorer?: import('../../core/lichess').ExplorerResultado;
+    cloud?: import('../../core/lichess').CloudEval | null;
+  } | null;
+  carregando: boolean;
+  erro?: string;
+  fim: boolean;
+}) {
+  const fmtCloud = (c: NonNullable<NonNullable<typeof dados>['cloud']>) => {
+    if (c.mate !== undefined) return c.mate > 0 ? `Mate em ${c.mate}` : `Mate em ${-c.mate} (contra)`;
+    if (c.cpBrancas === undefined) return '—';
+    const v = c.cpBrancas / 100;
+    return (v > 0 ? '+' : v < 0 ? '−' : '') + Math.abs(v).toFixed(2);
+  };
+
+  return (
+    <div className="nuvem-corpo">
+      {erro && <div className="nuvem-erro">⚠ {erro}</div>}
+      {carregando && !dados && <div className="nuvem-carreg">consultando o Lichess…</div>}
+
+      {dados?.cloud && (
+        <div className="nuvem-eval">
+          <span className="lbl" style={{ margin: 0 }}>
+            Avaliação em nuvem
+          </span>
+          <span className="nuvem-eval-num">{fmtCloud(dados.cloud)}</span>
+          <span className="nuvem-eval-prof">prof. {dados.cloud.depth}</span>
+        </div>
+      )}
+
+      {dados?.explorer && dados.explorer.totalJogos > 0 ? (
+        <>
+          <div className="nuvem-sub">
+            {dados.explorer.totalJogos.toLocaleString('pt-BR')} partidas de mestres nesta posição
+          </div>
+          <div className="nuvem-lances">
+            {dados.explorer.lances.slice(0, 6).map((m) => {
+              const tot = m.jogos || 1;
+              const pw = (m.white / tot) * 100;
+              const pd = (m.draws / tot) * 100;
+              const pb = (m.black / tot) * 100;
+              return (
+                <div className="nuvem-lance" key={m.san}>
+                  <span className="nl-san">{sanParaPtBr(m.san)}</span>
+                  <span className="nl-barra">
+                    <span className="nlb w" style={{ width: `${pw}%` }} />
+                    <span className="nlb d" style={{ width: `${pd}%` }} />
+                    <span className="nlb b" style={{ width: `${pb}%` }} />
+                  </span>
+                  <span className="nl-jogos">{m.jogos.toLocaleString('pt-BR')}</span>
+                </div>
+              );
+            })}
+          </div>
+          {dados.explorer.partidas.length > 0 && (
+            <div className="nuvem-partidas">
+              <span className="lbl" style={{ margin: '4px 0' }}>
+                Partidas célebres daqui
+              </span>
+              {dados.explorer.partidas.map((g, i) => (
+                <div className="nuvem-partida" key={i}>
+                  <span className="np-res">
+                    {g.vencedor === 'white' ? '1–0' : g.vencedor === 'black' ? '0–1' : '½–½'}
+                  </span>
+                  <span className="np-nomes">
+                    {g.brancas} × {g.pretas}
+                  </span>
+                  {g.ano && <span className="np-ano">{g.ano}</span>}
+                </div>
+              ))}
+            </div>
+          )}
+        </>
+      ) : (
+        dados &&
+        !carregando &&
+        !erro && (
+          <div className="nuvem-sub">
+            {fim
+              ? 'Posição final.'
+              : 'Posição rara — fora da base de partidas de mestres do Lichess.'}
+          </div>
+        )
+      )}
+
+      <div className="nuvem-credito">Dados: lichess.org · requer internet</div>
     </div>
   );
 }

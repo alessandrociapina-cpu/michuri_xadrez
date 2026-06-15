@@ -16,6 +16,23 @@
   margin-bottom: 26px;
 }
 
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+.brand-cat {
+  width: 56px;
+  height: 56px;
+  flex: none;
+}
+@media (min-width: 560px) {
+  .brand-cat {
+    width: 68px;
+    height: 68px;
+  }
+}
+
 .app-title {
   font-family: 'Fraunces', serif;
   font-weight: 900;

@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Play } from './features/play/Play';
 import { Trainer } from './features/openings/Trainer';
+import { Michuri } from './components/Michuri';
 import './App.css';
 
 type Aba = 'jogar' | 'aberturas';
@@ -11,11 +12,14 @@ export function App() {
   return (
     <div className="app-wrap">
       <header className="app-top">
-        <div>
-          <div className="eyebrow">Michuri · Xadrez</div>
-          <h1 className="app-title">
-            Jogue & <em>estude</em>
-          </h1>
+        <div className="brand">
+          <Michuri className="brand-cat" />
+          <div>
+            <div className="eyebrow">Michuri · Xadrez</div>
+            <h1 className="app-title">
+              Jogue & <em>estude</em>
+            </h1>
+          </div>
         </div>
         <nav className="app-nav" aria-label="Módulos">
           <button

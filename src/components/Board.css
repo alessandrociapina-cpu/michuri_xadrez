@@ -16,6 +16,39 @@
   height: 100%;
 }
 
+/* Coordenadas (a–h, 1–8): o padrão do chessground é minúsculo (9px) e some no
+   celular. Deixamos maiores, em negrito, com fonte mono e contorno para
+   legibilidade sobre qualquer casa. */
+.cg-host coords {
+  opacity: 1;
+  font-family: 'JetBrains Mono', monospace;
+  font-weight: 700;
+  font-size: 12px;
+  text-shadow:
+    0 0 2px rgba(0, 0, 0, 0.55),
+    0 1px 1px rgba(0, 0, 0, 0.4);
+}
+@media (max-width: 820px) {
+  /* No tabuleiro em largura quase total, as casas ficam grandes — acompanhar. */
+  .cg-host coords {
+    font-size: 3.1vw;
+  }
+}
+/* Reforça o contraste das cores alternadas (claras nas casas escuras e
+   vice-versa), substituindo os tons translúcidos do tema. */
+.cg-host .orientation-white .ranks :nth-child(odd),
+.cg-host .orientation-white .files :nth-child(even),
+.cg-host .orientation-black .ranks :nth-child(even),
+.cg-host .orientation-black .files :nth-child(odd) {
+  color: #4a3a24;
+}
+.cg-host .orientation-white .ranks :nth-child(even),
+.cg-host .orientation-white .files :nth-child(odd),
+.cg-host .orientation-black .ranks :nth-child(odd),
+.cg-host .orientation-black .files :nth-child(even) {
+  color: #f3ead3;
+}
+
 /* Cores das casas alinhadas à paleta do app (sobrescreve o tema "brown" com um
    tabuleiro SVG próprio: claras #E7D8B6, escuras #7C6244). */
 .cg-host cg-board {

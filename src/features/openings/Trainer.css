@@ -231,3 +231,41 @@
 .treino-feedback.fim {
   border-left-color: var(--gold);
 }
+
+/* ---- história da abertura (colapsável) ---- */
+.historia-bloco {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--ink-2);
+  overflow: hidden;
+}
+.historia-tog {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  background: transparent;
+  border: none;
+  color: var(--bone);
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 13px;
+  padding: 12px 14px;
+  cursor: pointer;
+}
+.historia-tog:hover {
+  color: var(--gold);
+}
+.historia-tog .chev {
+  color: var(--gold);
+  transition: transform 0.18s ease;
+}
+.historia-tog .chev.on {
+  transform: rotate(180deg);
+}
+.historia-txt {
+  padding: 2px 16px 16px;
+  font-size: 14px;
+  line-height: 1.7;
+  color: #cfc6ae;
+}

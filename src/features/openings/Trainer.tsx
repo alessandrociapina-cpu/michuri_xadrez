@@ -186,6 +186,7 @@ function Estudo({
       <div className="trn-right">
         <Lances opening={opening} idx={idx} irPara={irPara} />
         <Nota opening={opening} idx={idx} />
+        {opening.historia && <Historia opening={opening} />}
         <div className="analise-bloco">
           <button className="btn" onClick={analisar} disabled={analisando}>
             {analisando ? 'Analisando…' : 'Analisar com o motor'}
@@ -228,6 +229,23 @@ function Lances({
           </span>{' '}
         </span>
       ))}
+    </div>
+  );
+}
+
+function Historia({ opening }: { opening: Opening }) {
+  const [aberto, setAberto] = useState(false);
+  return (
+    <div className="historia-bloco">
+      <button
+        className="historia-tog"
+        onClick={() => setAberto((v) => !v)}
+        aria-expanded={aberto}
+      >
+        <span>📜 História da abertura</span>
+        <span className={'chev' + (aberto ? ' on' : '')}>▾</span>
+      </button>
+      {aberto && <p className="historia-txt">{opening.historia}</p>}
     </div>
   );
 }

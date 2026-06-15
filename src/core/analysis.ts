@@ -149,9 +149,17 @@ export async function analisarPartida(
 ): Promise<Relatorio | null> {
   await eng.pronto;
 
-  // Reproduz a partida e coleta os FENs de cada posição.
+  // Reproduz a partida e coleta os FENs de cada posição. Para cada uma guardamos
+  // também se ela é TERMINAL (sem lances legais): pedir a ESTA build do Stockfish
+  // para analisar um xeque-mate/afogamento a trava (nunca devolve "bestmove"),
+  // então nesses casos atribuímos a avaliação direto, sem chamar o motor.
+  const MATE_CP = 100000;
   const chess = new Chess();
   const fens: string[] = [chess.fen()];
+  // forcado: NaN = perguntar ao motor; número = avaliação imposta (perspectiva de
+  // quem tem a vez na posição). mateForcado: havia mate em jogo.
+  const forcado: number[] = [NaN];
+  const mateForcado: boolean[] = [false];
   const lances: { san: string; cor: 'white' | 'black' }[] = [];
   for (const s of sans) {
     let m;
@@ -163,6 +171,18 @@ export async function analisarPartida(
     if (!m) break;
     lances.push({ san: m.san, cor: m.color === 'w' ? 'white' : 'black' });
     fens.push(chess.fen());
+    if (chess.isCheckmate()) {
+      // Quem tem a vez está mateado: pior avaliação possível para esse lado.
+      forcado.push(-MATE_CP);
+      mateForcado.push(true);
+    } else if (chess.isGameOver()) {
+      // Afogamento, material insuficiente, repetição, 50 lances → empate.
+      forcado.push(0);
+      mateForcado.push(false);
+    } else {
+      forcado.push(NaN);
+      mateForcado.push(false);
+    }
   }
   const N = lances.length;
   if (N === 0) return null;
@@ -174,10 +194,17 @@ export async function analisarPartida(
   const ehMate: boolean[] = new Array(total).fill(false);
   for (let k = 0; k < total; k++) {
     if (deveAbortar?.()) return null;
-    const r = await eng.analyze(fens[k], movetimeMs);
-    evalVez[k] = paraCp(r.cp, r.mate);
-    melhorUci[k] = r.best;
-    ehMate[k] = r.mate !== undefined;
+    if (!Number.isNaN(forcado[k])) {
+      // Posição terminal: não chamamos o motor (ele travaria).
+      evalVez[k] = forcado[k];
+      ehMate[k] = mateForcado[k];
+      melhorUci[k] = undefined;
+    } else {
+      const r = await eng.analyze(fens[k], movetimeMs);
+      evalVez[k] = paraCp(r.cp, r.mate);
+      melhorUci[k] = r.best;
+      ehMate[k] = r.mate !== undefined;
+    }
     onProgresso?.(k + 1, total);
   }
 

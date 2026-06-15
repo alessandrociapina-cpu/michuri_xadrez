@@ -1,6 +1,13 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { Key } from 'chessground/types';
+import type { DrawShape } from 'chessground/draw';
 import { Board } from '../../components/Board';
+import {
+  EvalBarra,
+  EvalExterno,
+  liveCpBrancas,
+  pvParaPtbr,
+} from '../../components/EvalBar';
 import {
   Chess,
   avaliarFim,
@@ -10,11 +17,13 @@ import {
   ultimoLance,
   type Move,
 } from '../../core/chess';
-import { Engine, NIVEIS, type Nivel } from '../../core/engine';
+import { Engine, NIVEIS, type Nivel, type LiveInfo } from '../../core/engine';
 import { sanParaPtBr } from '../../core/notation';
 import { detectarAbertura } from '../../core/openingDetect';
 import { gerarPgn } from '../../core/pgn';
 import './Play.css';
+
+type ProfViva = 'd14' | 'd18' | 'inf';
 
 type Lado = 'white' | 'black';
 
@@ -43,6 +52,14 @@ export function Play({
   const [erroMotor, setErroMotor] = useState<string | undefined>();
   const [copiado, setCopiado] = useState(false);
 
+  // --- Análise ao vivo (motor SEPARADO, em força máxima) ---
+  const anEngineRef = useRef<Engine | null>(null);
+  const [analiseViva, setAnaliseViva] = useState(false);
+  const [liveInfo, setLiveInfo] = useState<LiveInfo | null>(null);
+  const [mostrarLinha, setMostrarLinha] = useState(false);
+  const [mostrarLance, setMostrarLance] = useState(false);
+  const [profViva, setProfViva] = useState<ProfViva>('d18');
+
   // Cria o motor uma vez e ajusta o nível inicial.
   useEffect(() => {
     const eng = new Engine();
@@ -59,6 +76,61 @@ export function Play({
   useEffect(() => {
     engineRef.current?.setNivel(nivel);
   }, [nivel]);
+
+  // Motor de ANÁLISE (separado do que joga): criado só quando a análise ao vivo
+  // é ligada, em força máxima, para não interferir na partida.
+  const garantirAnEngine = useCallback((): Engine => {
+    if (!anEngineRef.current) {
+      const e = new Engine();
+      e.setNivel('profissional');
+      anEngineRef.current = e;
+    }
+    return anEngineRef.current;
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      anEngineRef.current?.dispose();
+      anEngineRef.current = null;
+    };
+  }, []);
+
+  // Avalia continuamente a posição atual quando a análise ao vivo está ligada.
+  const fimDeJogo = !!fimMsg;
+  useEffect(() => {
+    if (!analiseViva || !ativo) return;
+    if (fimDeJogo) {
+      setLiveInfo(null);
+      return;
+    }
+    const fenAtual = fen;
+    setLiveInfo(null);
+    const depth = profViva === 'inf' ? undefined : profViva === 'd14' ? 14 : 18;
+    const t = setTimeout(() => {
+      const e = garantirAnEngine();
+      void e.startLive(fenAtual, { depth, onUpdate: (u) => setLiveInfo(u) });
+    }, 350);
+    return () => {
+      clearTimeout(t);
+      anEngineRef.current?.stopLive();
+    };
+  }, [analiseViva, ativo, fen, fimDeJogo, profViva, garantirAnEngine]);
+
+  // Para a análise ao vivo ao sair da aba (poupa CPU/bateria).
+  useEffect(() => {
+    if (!ativo) anEngineRef.current?.stopLive();
+  }, [ativo]);
+
+  const alternarAnaliseViva = useCallback(() => {
+    setAnaliseViva((v) => {
+      const novo = !v;
+      if (!novo) {
+        anEngineRef.current?.stopLive();
+        setLiveInfo(null);
+      }
+      return novo;
+    });
+  }, []);
 
   const sincronizar = useCallback(() => {
     const chess = chessRef.current;
@@ -210,19 +282,40 @@ export function Play({
   else if (vezDoJogador) statusTexto = emXeque(chess) ? 'Sua vez — você está em xeque!' : 'Sua vez de jogar.';
   else statusTexto = 'Aguardando o motor…';
 
+  // Avaliação ao vivo (perspectiva das brancas) e seta do melhor lance.
+  const mostrarEval = analiseViva && !!liveInfo && !fimMsg;
+  const avalBrancas = mostrarEval ? liveCpBrancas(liveInfo!, corDaVez(chess) === 'white') : null;
+  const pvUci = analiseViva && liveInfo?.pv?.length ? liveInfo.pv[0] : undefined;
+  // Memoizado por valor (não por identidade) para o tabuleiro só redesenhar a
+  // seta quando o melhor lance realmente mudar — não a cada atualização de eval.
+  const arrowOrig = mostrarLance && !fimMsg && pvUci && pvUci.length >= 4 ? pvUci.slice(0, 2) : '';
+  const arrowDest = mostrarLance && !fimMsg && pvUci && pvUci.length >= 4 ? pvUci.slice(2, 4) : '';
+  const shapes = useMemo<DrawShape[]>(
+    () => (arrowOrig && arrowDest ? [{ orig: arrowOrig as Key, dest: arrowDest as Key, brush: 'green' }] : []),
+    [arrowOrig, arrowDest],
+  );
+  const linhaPv = analiseViva && liveInfo ? pvParaPtbr(fen, liveInfo.pv, 5) : '';
+
   return (
     <div className="play-layout">
       <div className="board-col">
+        {avalBrancas !== null && (
+          <EvalExterno cpBrancas={avalBrancas} sub={`ao vivo · prof. ${liveInfo!.depth}`} />
+        )}
         <div className="board-stage">
-          <Board
-            fen={fen}
-            orientation={lado}
-            movableColor={vezDoJogador ? lado : undefined}
-            dests={dests}
-            lastMove={ultimo}
-            check={emXeque(chess)}
-            onMove={aoMover}
-          />
+          <div className="play-board-wrap">
+            {avalBrancas !== null && <EvalBarra cpBrancas={avalBrancas} orient={lado} />}
+            <Board
+              fen={fen}
+              orientation={lado}
+              movableColor={vezDoJogador ? lado : undefined}
+              dests={dests}
+              lastMove={ultimo}
+              check={emXeque(chess)}
+              shapes={shapes}
+              onMove={aoMover}
+            />
+          </div>
           {promo && (
             <PromocaoOverlay cor={lado} onEscolher={concluirPromocao} />
           )}
@@ -232,6 +325,22 @@ export function Play({
           <span className={'dot' + (pensando ? ' think' : vezDoJogador ? ' you' : '')} />
           {statusTexto}
         </div>
+
+        {analiseViva && (mostrarLinha || mostrarLance) && (
+          <div className="play-pv">
+            {fimMsg ? (
+              <span className="pv-calc">fim de jogo</span>
+            ) : liveInfo ? (
+              mostrarLinha && linhaPv ? (
+                <span>
+                  melhor linha: <strong>{linhaPv}</strong>
+                </span>
+              ) : null
+            ) : (
+              <span className="pv-calc">calculando…</span>
+            )}
+          </div>
+        )}
       </div>
 
       <div className="panel">
@@ -282,6 +391,53 @@ export function Play({
           <button className="btn" onClick={analisarPartida} disabled={sanHist.length === 0}>
             Analisar partida
           </button>
+        </div>
+
+        <div className="play-viva">
+          <div className="play-viva-top">
+            <label className="switch">
+              <input type="checkbox" checked={analiseViva} onChange={alternarAnaliseViva} />
+              <span className="switch-tr" />
+              <span className="switch-tx">Análise ao vivo</span>
+            </label>
+            <select
+              className="prof-viva"
+              value={profViva}
+              onChange={(e) => setProfViva(e.target.value as ProfViva)}
+              disabled={!analiseViva}
+              aria-label="Profundidade da análise ao vivo"
+            >
+              <option value="d14">Rápida (prof. 14)</option>
+              <option value="d18">Padrão (prof. 18)</option>
+              <option value="inf">Contínua (∞)</option>
+            </select>
+          </div>
+          {analiseViva && (
+            <div className="play-viva-opts">
+              <label className="switch sm">
+                <input
+                  type="checkbox"
+                  checked={mostrarLinha}
+                  onChange={() => setMostrarLinha((v) => !v)}
+                />
+                <span className="switch-tr" />
+                <span className="switch-tx">Mostrar a melhor linha</span>
+              </label>
+              <label className="switch sm">
+                <input
+                  type="checkbox"
+                  checked={mostrarLance}
+                  onChange={() => setMostrarLance((v) => !v)}
+                />
+                <span className="switch-tr" />
+                <span className="switch-tx">Indicar o melhor lance (seta)</span>
+              </label>
+            </div>
+          )}
+          <p className="play-viva-aviso">
+            Avaliação de um motor à parte, em força máxima — uma ajuda de estudo, não influencia o
+            adversário.
+          </p>
         </div>
 
         {abertura && (

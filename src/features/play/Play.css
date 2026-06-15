@@ -197,3 +197,116 @@
   border-color: var(--gold);
   background: #322a1d;
 }
+
+/* ---- análise ao vivo na aba Jogar ---- */
+.play-board-wrap {
+  display: flex;
+  align-items: stretch;
+  gap: 10px;
+}
+.play-board-wrap .board-outer {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+.eval-ext {
+  margin-bottom: 10px;
+}
+
+.play-pv {
+  margin-top: 10px;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--muted);
+}
+.play-pv strong {
+  color: var(--bone);
+  font-family: 'JetBrains Mono', monospace;
+  font-weight: 600;
+}
+.play-pv .pv-calc {
+  font-style: italic;
+}
+
+.play-viva {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  background: var(--ink-2);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 12px 14px;
+}
+.play-viva-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+.play-viva-opts {
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+}
+.play-viva-aviso {
+  font-size: 11px;
+  line-height: 1.5;
+  color: var(--muted);
+}
+
+/* interruptor (switch) e seletor de profundidade — reaproveitados na aba Jogar */
+.switch {
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  cursor: pointer;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 13px;
+  color: var(--bone);
+  user-select: none;
+}
+.switch.sm {
+  font-size: 12px;
+  color: var(--muted);
+}
+.switch input {
+  position: absolute;
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+.switch-tr {
+  position: relative;
+  width: 36px;
+  height: 20px;
+  border-radius: 99px;
+  background: var(--ink-3);
+  border: 1px solid var(--line);
+  transition: 0.18s;
+  flex: none;
+}
+.switch-tr::after {
+  content: '';
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: var(--muted);
+  transition: 0.18s;
+}
+.switch input:checked + .switch-tr {
+  background: var(--gold-soft);
+  border-color: var(--gold);
+}
+.switch input:checked + .switch-tr::after {
+  left: 18px;
+  background: var(--gold);
+}
+.prof-viva {
+  width: auto;
+  flex: none;
+  padding: 8px 30px 8px 12px;
+  font-size: 13px;
+  background-position: calc(100% - 14px) 16px, calc(100% - 9px) 16px;
+}

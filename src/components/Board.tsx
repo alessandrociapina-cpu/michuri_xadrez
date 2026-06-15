@@ -108,8 +108,9 @@ export function Board({
         showDests: true,
       },
     });
-    // Setas/marcações (ex.: seta do melhor lance na análise ao vivo).
-    api.setShapes(shapes ?? []);
+    // Setas do motor (ex.: melhor lance). Usamos autoShapes: camada própria que
+    // não interfere no arrastar das peças nem nas marcações do usuário.
+    api.setAutoShapes(shapes ?? []);
   }, [fen, orientation, movableColor, dests, lastMove, check, viewOnly, shapes, syncSignal]);
 
   // Coordenadas próprias, na margem do tabuleiro (alto contraste, fora das casas).

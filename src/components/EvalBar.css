@@ -1,0 +1,53 @@
+/* Avaliação compartilhada (Análise e Jogar). */
+
+.evalbar {
+  position: relative;
+  width: 15px;
+  flex: none;
+  border-radius: 6px;
+  background: #14110b;
+  border: 1px solid var(--line);
+  overflow: hidden;
+}
+.evalbar-fill {
+  position: absolute;
+  left: 0;
+  right: 0;
+  background: linear-gradient(180deg, #f1ead7, #cbc2a6);
+  transition: height 0.35s ease;
+}
+
+.eval-ext {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+}
+.eval-num {
+  font-family: 'JetBrains Mono', monospace;
+  font-weight: 700;
+  font-size: 26px;
+  letter-spacing: 0.01em;
+  line-height: 1;
+}
+.eval-num.pos {
+  color: #f4d57a;
+}
+.eval-num.neg {
+  color: #ff8a5c;
+}
+.eval-num.neutro {
+  color: var(--bone);
+}
+.eval-num.mate-pos {
+  color: #6ee7c8;
+}
+.eval-num.mate-neg {
+  color: #ff7a9c;
+}
+.eval-leg {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--muted);
+}

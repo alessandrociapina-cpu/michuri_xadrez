@@ -15,6 +15,13 @@ import {
 } from '../../core/analysis';
 import { miar, estaMudo, setMudo } from '../../core/meow';
 import { sanParaPtBr } from '../../core/notation';
+import {
+  buscarExplorer,
+  buscarCloudEval,
+  LichessErro,
+  type ExplorerResultado,
+  type CloudEval,
+} from '../../core/lichess';
 import { PARTIDAS_FAMOSAS, type JogoFamoso } from './famousGames';
 import './Analise.css';
 
@@ -53,11 +60,12 @@ export function Analise({ ativo, pgnInicial }: { ativo: boolean; pgnInicial?: st
   // Base de dados Lichess (Módulo 2): explorer de mestres + avaliação em nuvem.
   const [nuvemAberta, setNuvemAberta] = useState(false);
   const [nuvem, setNuvem] = useState<{
-    explorer?: import('../../core/lichess').ExplorerResultado;
-    cloud?: import('../../core/lichess').CloudEval | null;
+    explorer?: ExplorerResultado;
+    cloud?: CloudEval | null;
   } | null>(null);
   const [nuvemErro, setNuvemErro] = useState<string | undefined>();
   const [nuvemCarregando, setNuvemCarregando] = useState(false);
+  const [nuvemTentativa, setNuvemTentativa] = useState(0); // re-tenta a consulta
 
   // Análise ao vivo (Módulo 1): avalia continuamente a posição mostrada.
   const [aoVivo, setAoVivo] = useState(false);
@@ -193,6 +201,8 @@ export function Analise({ ativo, pgnInicial }: { ativo: boolean; pgnInicial?: st
   }, [ativo, aoVivo]);
 
   // Consulta a base do Lichess para a posição atual (quando o painel está aberto).
+  // Explorer e Cloud são INDEPENDENTES (allSettled): se um falhar, mostramos o
+  // outro. A mensagem de erro reflete a causa real (offline, limite, bloqueio…).
   useEffect(() => {
     if (!nuvemAberta || !ativo) return;
     const fen = posicao.fen;
@@ -200,32 +210,41 @@ export function Analise({ ativo, pgnInicial }: { ativo: boolean; pgnInicial?: st
     setNuvemErro(undefined);
     setNuvemCarregando(true);
     const t = setTimeout(async () => {
-      try {
-        const [exp, cloud] = await Promise.all([
-          import('../../core/lichess').then((m) => m.buscarExplorer(fen, ctrl.signal)),
-          import('../../core/lichess')
-            .then((m) => m.buscarCloudEval(fen, ctrl.signal))
-            .catch(() => null),
-        ]);
-        if (!ctrl.signal.aborted) setNuvem({ explorer: exp, cloud });
-      } catch (e) {
-        if (!ctrl.signal.aborted) {
-          setNuvem(null);
-          setNuvemErro(
-            (e as Error).name === 'AbortError'
-              ? undefined
-              : 'Sem conexão com o Lichess (recurso disponível apenas online).',
-          );
-        }
-      } finally {
-        if (!ctrl.signal.aborted) setNuvemCarregando(false);
+      const [rExp, rCloud] = await Promise.allSettled([
+        buscarExplorer(fen, ctrl.signal),
+        buscarCloudEval(fen, ctrl.signal),
+      ]);
+      if (ctrl.signal.aborted) return;
+
+      const explorer = rExp.status === 'fulfilled' ? rExp.value : undefined;
+      const cloud = rCloud.status === 'fulfilled' ? rCloud.value : undefined;
+      setNuvem({ explorer, cloud });
+
+      // Só reportamos erro se o EXPLORER (fonte principal) falhou de verdade
+      // (ignorando cancelamentos por troca de posição).
+      let msg: string | undefined;
+      if (rExp.status === 'rejected') {
+        const e = rExp.reason as Error;
+        if (e?.name === 'AbortError' || ctrl.signal.aborted) msg = undefined;
+        else if (e instanceof LichessErro) {
+          msg =
+            e.tipo === 'offline'
+              ? 'Você está offline — a base do Lichess precisa de internet.'
+              : e.tipo === 'limite'
+                ? 'Muitas consultas seguidas ao Lichess — aguarde alguns segundos e tente de novo.'
+                : e.tipo === 'timeout'
+                  ? 'O Lichess demorou a responder. Tente novamente.'
+                  : e.message;
+        } else msg = 'Não foi possível consultar o Lichess agora.';
       }
+      setNuvemErro(msg);
+      setNuvemCarregando(false);
     }, 400);
     return () => {
       clearTimeout(t);
       ctrl.abort();
     };
-  }, [nuvemAberta, ativo, posicao.fen]);
+  }, [nuvemAberta, ativo, posicao.fen, nuvemTentativa]);
 
   const carregarPgn = useCallback(() => {
     try {
@@ -661,6 +680,7 @@ export function Analise({ ativo, pgnInicial }: { ativo: boolean; pgnInicial?: st
                 carregando={nuvemCarregando}
                 erro={nuvemErro}
                 fim={posicao.fim}
+                onTentar={() => setNuvemTentativa((n) => n + 1)}
               />
             )}
           </div>
@@ -782,14 +802,16 @@ function NuvemPanel({
   carregando,
   erro,
   fim,
+  onTentar,
 }: {
   dados: {
-    explorer?: import('../../core/lichess').ExplorerResultado;
-    cloud?: import('../../core/lichess').CloudEval | null;
+    explorer?: ExplorerResultado;
+    cloud?: CloudEval | null;
   } | null;
   carregando: boolean;
   erro?: string;
   fim: boolean;
+  onTentar: () => void;
 }) {
   const fmtCloud = (c: NonNullable<NonNullable<typeof dados>['cloud']>) => {
     if (c.mate !== undefined) return c.mate > 0 ? `Mate em ${c.mate}` : `Mate em ${-c.mate} (contra)`;
@@ -800,7 +822,14 @@ function NuvemPanel({
 
   return (
     <div className="nuvem-corpo">
-      {erro && <div className="nuvem-erro">⚠ {erro}</div>}
+      {erro && (
+        <div className="nuvem-erro">
+          <span>⚠ {erro}</span>
+          <button className="btn mini" onClick={onTentar}>
+            Tentar novamente
+          </button>
+        </div>
+      )}
       {carregando && !dados && <div className="nuvem-carreg">consultando o Lichess…</div>}
 
       {dados?.cloud && (

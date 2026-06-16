@@ -521,6 +521,11 @@
 .nuvem-erro {
   color: var(--rust);
   font-size: 13px;
+  line-height: 1.5;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
 }
 .nuvem-carreg {
   font-size: 13px;

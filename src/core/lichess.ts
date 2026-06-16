@@ -1,19 +1,13 @@
-// Integração com a API pública do Lichess (Módulo 2 — análise em nuvem).
+// Integração com a API pública do Lichess (Módulo 2 — base de dados online).
 //
-// Usamos apenas endpoints GRATUITOS e SEM TOKEN, que aceitam CORS e funcionam
-// direto do navegador:
-//   • Explorer de mestres  — estatísticas reais de partidas de GMs na posição.
-//   • Cloud Eval           — avaliação do Stockfish na nuvem (quando a posição
-//                            já está na base; caso contrário devolve 404).
-//
-// Tudo é "online-only": cada função recebe um AbortSignal e lança um LichessErro
-// descritivo em caso de falha, para a UI mostrar a causa real (offline, CORS,
-// limite de uso, etc.) em vez de uma mensagem genérica.
+// Usamos só o Explorer de mestres (explorer.lichess.ovh), endpoint GRATUITO,
+// SEM TOKEN e com CORS liberado — estatísticas reais de partidas de Grandes
+// Mestres na posição. É "online-only": lança um LichessErro descritivo quando
+// falha, para a UI mostrar a causa real (offline, limite, recusa, etc.).
 
 const EXPLORER = 'https://explorer.lichess.ovh/masters';
-const CLOUD = 'https://lichess.org/api/cloud-eval';
 
-export type TipoErro = 'offline' | 'limite' | 'bloqueio' | 'status' | 'timeout';
+export type TipoErro = 'offline' | 'limite' | 'recusado' | 'bloqueio' | 'status' | 'timeout';
 
 export class LichessErro extends Error {
   tipo: TipoErro;
@@ -26,8 +20,6 @@ export class LichessErro extends Error {
   }
 }
 
-// Faz o fetch com timeout próprio + repasse do AbortSignal externo, traduzindo
-// as falhas (rede/CORS/timeout/status) num LichessErro classificado.
 async function buscarJson(url: string, signal?: AbortSignal, timeoutMs = 9000): Promise<unknown> {
   const ctrl = new AbortController();
   const aoAbortar = () => ctrl.abort();
@@ -37,10 +29,8 @@ async function buscarJson(url: string, signal?: AbortSignal, timeoutMs = 9000): 
   try {
     r = await fetch(url, { signal: ctrl.signal, headers: { Accept: 'application/json' } });
   } catch (e) {
-    if (signal?.aborted) throw e; // cancelamento legítimo (troca de posição) — repassa
+    if (signal?.aborted) throw e; // cancelamento legítimo (troca de posição)
     if (ctrl.signal.aborted) throw new LichessErro('timeout', 'O Lichess demorou a responder.');
-    // fetch só lança TypeError quando a requisição nem completa: offline, DNS,
-    // CORS bloqueado pelo navegador, etc.
     if (typeof navigator !== 'undefined' && navigator.onLine === false) {
       throw new LichessErro('offline', 'Você está sem conexão com a internet.');
     }
@@ -52,10 +42,18 @@ async function buscarJson(url: string, signal?: AbortSignal, timeoutMs = 9000): 
     clearTimeout(timer);
     signal?.removeEventListener('abort', aoAbortar);
   }
+  if (r.status === 401 || r.status === 403) {
+    throw new LichessErro(
+      'recusado',
+      'O Lichess recusou o acesso (' +
+        r.status +
+        '). Costuma ser uma extensão do navegador, VPN ou a rede bloqueando o site — tente em outra rede ou numa aba anônima sem extensões.',
+      r.status,
+    );
+  }
   if (r.status === 429) {
     throw new LichessErro('limite', 'Muitas consultas seguidas — aguarde alguns segundos.', 429);
   }
-  if (r.status === 404) return null;
   if (!r.ok) throw new LichessErro('status', `O Lichess respondeu ${r.status}.`, r.status);
   return r.json();
 }
@@ -114,39 +112,4 @@ export async function buscarExplorer(
   }));
   const totalJogos = (j.white ?? 0) + (j.draws ?? 0) + (j.black ?? 0);
   return { totalJogos, lances, partidas };
-}
-
-export type CloudEval = {
-  /** Avaliação em cp na perspectiva das BRANCAS (ou mate). */
-  cpBrancas?: number;
-  mate?: number;
-  depth: number;
-  /** Variante principal em UCI. */
-  pv: string[];
-};
-
-export async function buscarCloudEval(
-  fen: string,
-  signal?: AbortSignal,
-): Promise<CloudEval | null> {
-  const url = `${CLOUD}?fen=${encodeURIComponent(fen)}&multiPv=1`;
-  const j = (await buscarJson(url, signal)) as {
-    depth?: number;
-    pvs?: { moves?: string; cp?: number; mate?: number }[];
-  } | null;
-  if (!j) return null; // 404: posição não está na base da nuvem
-  const pv = j.pvs?.[0];
-  if (!pv) return null;
-  // O cp do cloud-eval vem na perspectiva de quem tem a vez; convertemos p/ brancas.
-  const brancasVez = fen.split(' ')[1] === 'w';
-  let cpBrancas: number | undefined;
-  let mate: number | undefined;
-  if (typeof pv.cp === 'number') cpBrancas = brancasVez ? pv.cp : -pv.cp;
-  if (typeof pv.mate === 'number') mate = brancasVez ? pv.mate : -pv.mate;
-  return {
-    cpBrancas,
-    mate,
-    depth: j.depth ?? 0,
-    pv: typeof pv.moves === 'string' ? pv.moves.split(/\s+/) : [],
-  };
 }

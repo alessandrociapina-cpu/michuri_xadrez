@@ -17,10 +17,8 @@ import { miar, estaMudo, setMudo } from '../../core/meow';
 import { sanParaPtBr } from '../../core/notation';
 import {
   buscarExplorer,
-  buscarCloudEval,
   LichessErro,
   type ExplorerResultado,
-  type CloudEval,
 } from '../../core/lichess';
 import { PARTIDAS_FAMOSAS, type JogoFamoso } from './famousGames';
 import './Analise.css';
@@ -57,12 +55,9 @@ export function Analise({ ativo, pgnInicial }: { ativo: boolean; pgnInicial?: st
   const [ajuda, setAjuda] = useState(false);
   const [jogo, setJogo] = useState<JogoFamoso | null>(null);
 
-  // Base de dados Lichess (Módulo 2): explorer de mestres + avaliação em nuvem.
+  // Base de dados Lichess (Módulo 2): explorer de partidas de mestres.
   const [nuvemAberta, setNuvemAberta] = useState(false);
-  const [nuvem, setNuvem] = useState<{
-    explorer?: ExplorerResultado;
-    cloud?: CloudEval | null;
-  } | null>(null);
+  const [nuvem, setNuvem] = useState<ExplorerResultado | null>(null);
   const [nuvemErro, setNuvemErro] = useState<string | undefined>();
   const [nuvemCarregando, setNuvemCarregando] = useState(false);
   const [nuvemTentativa, setNuvemTentativa] = useState(0); // re-tenta a consulta
@@ -200,9 +195,8 @@ export function Analise({ ativo, pgnInicial }: { ativo: boolean; pgnInicial?: st
     if (!ativo && aoVivo) engineRef.current?.stopLive();
   }, [ativo, aoVivo]);
 
-  // Consulta a base do Lichess para a posição atual (quando o painel está aberto).
-  // Explorer e Cloud são INDEPENDENTES (allSettled): se um falhar, mostramos o
-  // outro. A mensagem de erro reflete a causa real (offline, limite, bloqueio…).
+  // Consulta a base de mestres do Lichess para a posição atual (painel aberto).
+  // A mensagem de erro reflete a causa real (offline, limite, recusa, etc.).
   useEffect(() => {
     if (!nuvemAberta || !ativo) return;
     const fen = posicao.fen;
@@ -210,35 +204,20 @@ export function Analise({ ativo, pgnInicial }: { ativo: boolean; pgnInicial?: st
     setNuvemErro(undefined);
     setNuvemCarregando(true);
     const t = setTimeout(async () => {
-      const [rExp, rCloud] = await Promise.allSettled([
-        buscarExplorer(fen, ctrl.signal),
-        buscarCloudEval(fen, ctrl.signal),
-      ]);
-      if (ctrl.signal.aborted) return;
-
-      const explorer = rExp.status === 'fulfilled' ? rExp.value : undefined;
-      const cloud = rCloud.status === 'fulfilled' ? rCloud.value : undefined;
-      setNuvem({ explorer, cloud });
-
-      // Só reportamos erro se o EXPLORER (fonte principal) falhou de verdade
-      // (ignorando cancelamentos por troca de posição).
-      let msg: string | undefined;
-      if (rExp.status === 'rejected') {
-        const e = rExp.reason as Error;
-        if (e?.name === 'AbortError' || ctrl.signal.aborted) msg = undefined;
-        else if (e instanceof LichessErro) {
-          msg =
-            e.tipo === 'offline'
-              ? 'Você está offline — a base do Lichess precisa de internet.'
-              : e.tipo === 'limite'
-                ? 'Muitas consultas seguidas ao Lichess — aguarde alguns segundos e tente de novo.'
-                : e.tipo === 'timeout'
-                  ? 'O Lichess demorou a responder. Tente novamente.'
-                  : e.message;
-        } else msg = 'Não foi possível consultar o Lichess agora.';
+      try {
+        const exp = await buscarExplorer(fen, ctrl.signal);
+        if (ctrl.signal.aborted) return;
+        setNuvem(exp);
+        setNuvemErro(undefined);
+      } catch (e) {
+        if (ctrl.signal.aborted || (e as Error)?.name === 'AbortError') return;
+        setNuvem(null);
+        setNuvemErro(
+          e instanceof LichessErro ? e.message : 'Não foi possível consultar o Lichess agora.',
+        );
+      } finally {
+        if (!ctrl.signal.aborted) setNuvemCarregando(false);
       }
-      setNuvemErro(msg);
-      setNuvemCarregando(false);
     }, 400);
     return () => {
       clearTimeout(t);
@@ -804,22 +783,12 @@ function NuvemPanel({
   fim,
   onTentar,
 }: {
-  dados: {
-    explorer?: ExplorerResultado;
-    cloud?: CloudEval | null;
-  } | null;
+  dados: ExplorerResultado | null;
   carregando: boolean;
   erro?: string;
   fim: boolean;
   onTentar: () => void;
 }) {
-  const fmtCloud = (c: NonNullable<NonNullable<typeof dados>['cloud']>) => {
-    if (c.mate !== undefined) return c.mate > 0 ? `Mate em ${c.mate}` : `Mate em ${-c.mate} (contra)`;
-    if (c.cpBrancas === undefined) return '—';
-    const v = c.cpBrancas / 100;
-    return (v > 0 ? '+' : v < 0 ? '−' : '') + Math.abs(v).toFixed(2);
-  };
-
   return (
     <div className="nuvem-corpo">
       {erro && (
@@ -832,23 +801,13 @@ function NuvemPanel({
       )}
       {carregando && !dados && <div className="nuvem-carreg">consultando o Lichess…</div>}
 
-      {dados?.cloud && (
-        <div className="nuvem-eval">
-          <span className="lbl" style={{ margin: 0 }}>
-            Avaliação em nuvem
-          </span>
-          <span className="nuvem-eval-num">{fmtCloud(dados.cloud)}</span>
-          <span className="nuvem-eval-prof">prof. {dados.cloud.depth}</span>
-        </div>
-      )}
-
-      {dados?.explorer && dados.explorer.totalJogos > 0 ? (
+      {dados && dados.totalJogos > 0 ? (
         <>
           <div className="nuvem-sub">
-            {dados.explorer.totalJogos.toLocaleString('pt-BR')} partidas de mestres nesta posição
+            {dados.totalJogos.toLocaleString('pt-BR')} partidas de mestres nesta posição
           </div>
           <div className="nuvem-lances">
-            {dados.explorer.lances.slice(0, 6).map((m) => {
+            {dados.lances.slice(0, 6).map((m) => {
               const tot = m.jogos || 1;
               const pw = (m.white / tot) * 100;
               const pd = (m.draws / tot) * 100;
@@ -866,12 +825,12 @@ function NuvemPanel({
               );
             })}
           </div>
-          {dados.explorer.partidas.length > 0 && (
+          {dados.partidas.length > 0 && (
             <div className="nuvem-partidas">
               <span className="lbl" style={{ margin: '4px 0' }}>
                 Partidas célebres daqui
               </span>
-              {dados.explorer.partidas.map((g, i) => (
+              {dados.partidas.map((g, i) => (
                 <div className="nuvem-partida" key={i}>
                   <span className="np-res">
                     {g.vencedor === 'white' ? '1–0' : g.vencedor === 'black' ? '0–1' : '½–½'}

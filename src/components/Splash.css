@@ -76,6 +76,13 @@
   color: var(--muted);
   animation: splash-hint 1.8s ease-in-out infinite;
 }
+.splash-versao {
+  margin-top: 16px;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10px;
+  letter-spacing: 0.06em;
+  color: rgba(169, 159, 134, 0.55);
+}
 
 @keyframes splash-in {
   from {

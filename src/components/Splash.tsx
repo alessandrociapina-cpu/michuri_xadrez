@@ -40,6 +40,9 @@ export function Splash({ onDone }: { onDone: () => void }) {
         </h1>
         <p className="splash-sub">Jogue contra o motor e estude aberturas clássicas.</p>
         <div className="splash-hint">toque para começar</div>
+        <div className="splash-versao">
+          v{__APP_VERSION__} · build {__BUILD_DATE__}
+        </div>
       </div>
     </div>
   );

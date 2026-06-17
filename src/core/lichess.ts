@@ -1,11 +1,12 @@
 // Integração com a API pública do Lichess (Módulo 2 — base de dados online).
 //
-// Usamos só o Explorer de mestres (explorer.lichess.ovh), endpoint GRATUITO,
-// SEM TOKEN e com CORS liberado — estatísticas reais de partidas de Grandes
-// Mestres na posição. É "online-only": lança um LichessErro descritivo quando
-// falha, para a UI mostrar a causa real (offline, limite, recusa, etc.).
-
-const EXPLORER = 'https://explorer.lichess.ovh/masters';
+// Usamos só o Explorer de mestres, endpoint GRATUITO, SEM TOKEN e com CORS
+// liberado — estatísticas reais de partidas de Grandes Mestres na posição. É
+// "online-only": lança um LichessErro descritivo quando falha.
+//
+// IMPORTANTE: o host correto do explorer é "explorer.lichess.org". O antigo
+// "explorer.lichess.ovh" foi descontinuado e passou a responder 401.
+const EXPLORER = 'https://explorer.lichess.org/masters';
 
 export type TipoErro = 'offline' | 'limite' | 'recusado' | 'bloqueio' | 'status' | 'timeout';
 

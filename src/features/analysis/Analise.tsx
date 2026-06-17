@@ -33,6 +33,9 @@ const ROTULO_PROF: Record<Profundidade, string> = {
 
 type Orientacao = 'white' | 'black';
 
+// Avaliação ao vivo já processada (ótica das brancas) + FEN a que pertence.
+type VivoView = { cpBrancas: number; depth: number; pv: string[]; fen: string };
+
 export function Analise({ ativo, pgnInicial }: { ativo: boolean; pgnInicial?: string }) {
   const engineRef = useRef<Engine | null>(null);
   const abortarRef = useRef(false);
@@ -63,8 +66,10 @@ export function Analise({ ativo, pgnInicial }: { ativo: boolean; pgnInicial?: st
   const [nuvemTentativa, setNuvemTentativa] = useState(0); // re-tenta a consulta
 
   // Análise ao vivo (Módulo 1): avalia continuamente a posição mostrada.
+  // Guardamos a avaliação já na ótica das BRANCAS + o FEN a que se refere, para
+  // a barra não "piscar" ao trocar de posição (mantém o último valor).
   const [aoVivo, setAoVivo] = useState(false);
-  const [liveInfo, setLiveInfo] = useState<LiveInfo | null>(null);
+  const [vivo, setVivo] = useState<VivoView | null>(null);
   const [setaMelhor, setSetaMelhor] = useState(false); // seta do melhor lance (off por padrão)
   const [profViva, setProfViva] = useState<'d14' | 'd18' | 'inf'>('d18');
 
@@ -168,27 +173,27 @@ export function Analise({ ativo, pgnInicial }: { ativo: boolean; pgnInicial?: st
   }, [ativo]);
 
   // Análise AO VIVO: ao ligar (ou navegar), avalia a posição atual em tempo real.
-  // Debounce de 350 ms evita acúmulo de requisições ao avançar/voltar rápido.
+  // NÃO zeramos o valor anterior ao trocar de posição (a barra mantém o último e
+  // desliza), evitando o efeito de piscar. Debounce de 350 ms.
   useEffect(() => {
-    if (!aoVivo || !ativo) return;
-    if (posicao.fim) {
-      // Posição terminal trava o motor (não devolve bestmove); não analisamos.
-      setLiveInfo(null);
-      return;
-    }
+    if (!aoVivo || !ativo || posicao.fim) return;
     const fen = posicao.fen;
-    setLiveInfo(null);
+    const brancasVez = posicao.brancasVez;
     const depth = profViva === 'inf' ? undefined : profViva === 'd14' ? 14 : 18;
     const t = setTimeout(() => {
       const eng = garantirEngine();
-      void eng.startLive(fen, { depth, onUpdate: (u) => setLiveInfo(u) });
+      void eng.startLive(fen, {
+        depth,
+        onUpdate: (u) =>
+          setVivo({ cpBrancas: liveCpBrancas(u, brancasVez), depth: u.depth, pv: u.pv, fen }),
+      });
     }, 350);
     return () => {
       clearTimeout(t);
       engineRef.current?.stopLive();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [aoVivo, ativo, posicao.fen, posicao.fim, profViva]);
+  }, [aoVivo, ativo, posicao.fen, posicao.fim, posicao.brancasVez, profViva]);
 
   // Desliga a análise ao vivo ao sair da aba (libera o motor).
   useEffect(() => {
@@ -288,7 +293,7 @@ export function Analise({ ativo, pgnInicial }: { ativo: boolean; pgnInicial?: st
       const novo = !v;
       if (!novo) {
         engineRef.current?.stopLive();
-        setLiveInfo(null);
+        setVivo(null);
       }
       return novo;
     });
@@ -300,7 +305,7 @@ export function Analise({ ativo, pgnInicial }: { ativo: boolean; pgnInicial?: st
     // A análise em lote e a ao vivo disputam o mesmo motor: desliga a ao vivo.
     setAoVivo(false);
     eng.stopLive();
-    setLiveInfo(null);
+    setVivo(null);
     setTocando(false);
     setAnalisando(true);
     setProgresso(0);
@@ -354,18 +359,20 @@ export function Analise({ ativo, pgnInicial }: { ativo: boolean; pgnInicial?: st
   const lanceAtual = relatorio && ply > 0 ? relatorio.lances[ply - 1] : undefined;
   const notaHist = jogo && ply > 0 ? jogo.notas[ply - 1] : undefined;
 
-  // Avaliação mostrada na barra/rótulo: ao vivo (se ligado) ou da análise em lote.
+  // Avaliação mostrada na barra/rótulo: ao vivo (se ligado, mantendo o último
+  // valor para não piscar) ou da análise em lote.
   let avalExibida: number | null = null;
-  if (aoVivo && liveInfo) avalExibida = liveCpBrancas(liveInfo, posicao.brancasVez);
+  if (aoVivo && vivo) avalExibida = vivo.cpBrancas;
   else if (relatorio) avalExibida = avalCorrente(relatorio, ply);
 
-  // Seta do melhor lance (só quando ligada e há análise ao vivo).
+  // Seta e melhor linha só quando já se referem à posição ATUAL (vivo.fen casa).
+  const vivoAtual = aoVivo && vivo && vivo.fen === posicao.fen ? vivo : null;
   const shapes: DrawShape[] = [];
-  const pvUci = aoVivo && liveInfo?.pv?.length ? liveInfo.pv[0] : undefined;
+  const pvUci = vivoAtual?.pv?.length ? vivoAtual.pv[0] : undefined;
   if (setaMelhor && pvUci && pvUci.length >= 4) {
     shapes.push({ orig: pvUci.slice(0, 2) as Key, dest: pvUci.slice(2, 4) as Key, brush: 'green' });
   }
-  const linhaPv = aoVivo && liveInfo ? pvParaPtbr(posicao.fen, liveInfo.pv, 5) : '';
+  const linhaPv = vivoAtual ? pvParaPtbr(vivoAtual.fen, vivoAtual.pv, 5) : '';
 
   return (
     <div className="ana-layout">
@@ -374,7 +381,7 @@ export function Analise({ ativo, pgnInicial }: { ativo: boolean; pgnInicial?: st
           <div className="ana-aval-ext">
             <span className={'aval-num ' + sinalAval(avalExibida)}>{formatAval(avalExibida)}</span>
             <span className="aval-leg">
-              {aoVivo && liveInfo ? `ao vivo · prof. ${liveInfo.depth}` : 'avaliação (peões)'}
+              {aoVivo && vivo ? `ao vivo · prof. ${vivo.depth}` : 'avaliação (peões)'}
             </span>
           </div>
         )}
@@ -605,9 +612,9 @@ export function Analise({ ativo, pgnInicial }: { ativo: boolean; pgnInicial?: st
               <div className="ana-vivo-info">
                 {posicao.fim ? (
                   <span className="vivo-fim">Posição final — sem lances para calcular.</span>
-                ) : liveInfo ? (
+                ) : vivo ? (
                   <>
-                    <span className="vivo-prof">prof. {liveInfo.depth}</span>
+                    <span className="vivo-prof">prof. {vivo.depth}</span>
                     {linhaPv && (
                       <span className="vivo-pv">
                         melhor linha: <strong>{linhaPv}</strong>

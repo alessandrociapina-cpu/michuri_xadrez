@@ -625,6 +625,29 @@
   letter-spacing: 0.04em;
   border-top: 1px solid var(--line);
   padding-top: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.nuvem-sair {
+  background: none;
+  border: none;
+  color: var(--gold);
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10px;
+  letter-spacing: 0.04em;
+  cursor: pointer;
+  padding: 0;
+  text-decoration: underline;
+}
+.nuvem-login-txt {
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--muted);
+}
+.nuvem-entrar {
+  align-self: flex-start;
 }
 
 /* ---- gráfico de vantagem + navegação por erros ---- */

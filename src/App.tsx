@@ -1,18 +1,58 @@
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { Play } from './features/play/Play';
 import { Trainer } from './features/openings/Trainer';
 import { Analise } from './features/analysis/Analise';
 import { Michuri } from './components/Michuri';
 import { Splash } from './components/Splash';
+import {
+  ehRetornoOAuth,
+  estaLogado,
+  iniciarLogin,
+  logout,
+  tratarRedirect,
+} from './core/lichessAuth';
 import './App.css';
 
 type Aba = 'jogar' | 'aberturas' | 'analise';
 
 export function App() {
   const [aba, setAba] = useState<Aba>('jogar');
-  const [splash, setSplash] = useState(true);
+  // Pula a splash quando estamos voltando do login do Lichess (mostra o resultado).
+  const [splash, setSplash] = useState(() => !ehRetornoOAuth());
   // PGN enviado da aba Jogar para a aba Análise.
   const [pgnAnalise, setPgnAnalise] = useState<string | undefined>();
+
+  // Estado de login no Lichess.
+  const [lichessLogado, setLichessLogado] = useState(estaLogado());
+  const [lichessErro, setLichessErro] = useState<string | undefined>();
+
+  // No boot: se a URL for um retorno do OAuth, conclui o login e abre a Análise.
+  useEffect(() => {
+    let cancel = false;
+    void tratarRedirect().then((res) => {
+      if (cancel || !res) return;
+      setAba('analise');
+      if (res.ok) {
+        setLichessLogado(true);
+        setLichessErro(undefined);
+      } else {
+        setLichessErro(res.erro);
+      }
+    });
+    return () => {
+      cancel = true;
+    };
+  }, []);
+
+  const entrarLichess = useCallback(() => {
+    setLichessErro(undefined);
+    void iniciarLogin();
+  }, []);
+
+  const sairLichess = useCallback(() => {
+    logout();
+    setLichessLogado(false);
+  }, []);
 
   const enviarParaAnalise = useCallback((pgn: string) => {
     setPgnAnalise(pgn);
@@ -67,7 +107,14 @@ export function App() {
           <Trainer ativo={aba === 'aberturas'} />
         </section>
         <section hidden={aba !== 'analise'} aria-hidden={aba !== 'analise'}>
-          <Analise ativo={aba === 'analise'} pgnInicial={pgnAnalise} />
+          <Analise
+            ativo={aba === 'analise'}
+            pgnInicial={pgnAnalise}
+            lichessLogado={lichessLogado}
+            lichessErro={lichessErro}
+            onEntrarLichess={entrarLichess}
+            onSairLichess={sairLichess}
+          />
         </section>
       </main>
     </div>

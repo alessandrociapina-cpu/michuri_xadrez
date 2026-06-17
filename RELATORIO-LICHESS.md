@@ -1,9 +1,45 @@
 # Relatório técnico — Integração com a API do Lichess (recurso "Base de dados")
 
 **Projeto:** Xadrez do Michuri (PWA de xadrez)
-**Versão do app no momento do relatório:** 0.2.1
+**Versão do app no momento do relatório:** 0.2.1 (diagnóstico) → **0.3.0 (correção aplicada)**
 **Data:** 2026-06-17
-**Status:** ❌ Não funcional — consulta retorna **HTTP 401** no navegador do usuário, mesmo online.
+**Status:** ⚠️ Causa confirmada (Hipótese B: explorer exige autenticação). **Solução implementada na v0.3.0: login OAuth 2.0 PKCE.**
+
+---
+
+## 0. ATUALIZAÇÃO (17/06) — Solução implementada (v0.3.0)
+
+Confirmada a **Hipótese B**: o Opening Explorer (`explorer.lichess.org`) passou a
+**exigir autenticação** e retorna **401** sem token.
+
+**Correção aplicada:** login do usuário via **OAuth 2.0 com PKCE** (fluxo próprio
+para apps públicos client-side, sem segredo de cliente). O token resultante é
+enviado no cabeçalho `Authorization: Bearer <token>` em cada chamada ao explorer.
+
+Arquivos novos/alterados:
+- `src/core/lichessAuth.ts` (NOVO) — fluxo PKCE: `iniciarLogin()`,
+  `tratarRedirect()`, `getToken()`, `logout()`. `client_id` arbitrário (URL do
+  app), `redirect_uri` = `window.location.origin + import.meta.env.BASE_URL`,
+  authorize em `https://lichess.org/oauth`, token em `https://lichess.org/api/token`,
+  `scope` vazio (o explorer só exige "estar autenticado").
+- `src/core/lichess.ts` — `buscarJson` injeta `Authorization: Bearer` se houver token.
+- `src/App.tsx` — no boot, `tratarRedirect()` conclui o login e abre a aba Análise.
+- `src/features/analysis/Analise.tsx` — painel mostra "Entrar com o Lichess"
+  quando deslogado; consulta só com login; opção "Sair".
+
+**Ponto de atenção que o revisor deve VALIDAR em produção** (não testável no
+ambiente de dev, que tem egress bloqueado):
+1. A requisição GET ao explorer com header `Authorization` **dispara um preflight
+   CORS (OPTIONS)**. É preciso confirmar que `explorer.lichess.org` responde ao
+   OPTIONS com `Access-Control-Allow-Headers: Authorization` e
+   `Access-Control-Allow-Origin` compatível com a origem do GitHub Pages.
+2. O POST a `https://lichess.org/api/token` deve ter CORS liberado (esperado para
+   clientes PKCE públicos). `Content-Type: application/x-www-form-urlencoded` é
+   safelisted (sem preflight).
+3. Conferir se o `scope` vazio é aceito; se o explorer exigir algum escopo,
+   ajustar `SCOPES` em `lichessAuth.ts`.
+
+O restante deste documento é o **diagnóstico original** que levou a esta solução.
 
 Este documento descreve, para análise por outro desenvolvedor, **como** a chamada
 ao Lichess é feita, **qual erro** ocorre, **o ambiente**, e **todas as tentativas

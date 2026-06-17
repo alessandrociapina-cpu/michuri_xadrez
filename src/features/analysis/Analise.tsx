@@ -36,7 +36,21 @@ type Orientacao = 'white' | 'black';
 // Avaliação ao vivo já processada (ótica das brancas) + FEN a que pertence.
 type VivoView = { cpBrancas: number; depth: number; pv: string[]; fen: string };
 
-export function Analise({ ativo, pgnInicial }: { ativo: boolean; pgnInicial?: string }) {
+export function Analise({
+  ativo,
+  pgnInicial,
+  lichessLogado,
+  lichessErro,
+  onEntrarLichess,
+  onSairLichess,
+}: {
+  ativo: boolean;
+  pgnInicial?: string;
+  lichessLogado: boolean;
+  lichessErro?: string;
+  onEntrarLichess: () => void;
+  onSairLichess: () => void;
+}) {
   const engineRef = useRef<Engine | null>(null);
   const abortarRef = useRef(false);
 
@@ -204,6 +218,13 @@ export function Analise({ ativo, pgnInicial }: { ativo: boolean; pgnInicial?: st
   // A mensagem de erro reflete a causa real (offline, limite, recusa, etc.).
   useEffect(() => {
     if (!nuvemAberta || !ativo) return;
+    // Sem login não há o que consultar (o explorer exige autenticação).
+    if (!lichessLogado) {
+      setNuvem(null);
+      setNuvemErro(undefined);
+      setNuvemCarregando(false);
+      return;
+    }
     const fen = posicao.fen;
     const ctrl = new AbortController();
     setNuvemErro(undefined);
@@ -228,7 +249,7 @@ export function Analise({ ativo, pgnInicial }: { ativo: boolean; pgnInicial?: st
       clearTimeout(t);
       ctrl.abort();
     };
-  }, [nuvemAberta, ativo, posicao.fen, nuvemTentativa]);
+  }, [nuvemAberta, ativo, posicao.fen, nuvemTentativa, lichessLogado]);
 
   const carregarPgn = useCallback(() => {
     try {
@@ -667,6 +688,10 @@ export function Analise({ ativo, pgnInicial }: { ativo: boolean; pgnInicial?: st
                 erro={nuvemErro}
                 fim={posicao.fim}
                 onTentar={() => setNuvemTentativa((n) => n + 1)}
+                logado={lichessLogado}
+                loginErro={lichessErro}
+                onEntrar={onEntrarLichess}
+                onSair={onSairLichess}
               />
             )}
           </div>
@@ -789,13 +814,39 @@ function NuvemPanel({
   erro,
   fim,
   onTentar,
+  logado,
+  loginErro,
+  onEntrar,
+  onSair,
 }: {
   dados: ExplorerResultado | null;
   carregando: boolean;
   erro?: string;
   fim: boolean;
   onTentar: () => void;
+  logado: boolean;
+  loginErro?: string;
+  onEntrar: () => void;
+  onSair: () => void;
 }) {
+  // Sem login: a base do Lichess exige autenticação. Mostra o convite a entrar.
+  if (!logado) {
+    return (
+      <div className="nuvem-corpo">
+        <p className="nuvem-login-txt">
+          A base de partidas de mestres do Lichess passou a exigir login. Entre com sua conta do
+          Lichess (gratuita) para ver as estatísticas. O app não vê sua senha — a autorização é
+          feita no próprio site do Lichess.
+        </p>
+        {loginErro && <div className="nuvem-erro">⚠ {loginErro}</div>}
+        <button className="btn primary nuvem-entrar" onClick={onEntrar}>
+          Entrar com o Lichess
+        </button>
+        <div className="nuvem-credito">Dados: lichess.org · requer internet e login</div>
+      </div>
+    );
+  }
+
   return (
     <div className="nuvem-corpo">
       {erro && (
@@ -863,7 +914,12 @@ function NuvemPanel({
         )
       )}
 
-      <div className="nuvem-credito">Dados: lichess.org · requer internet</div>
+      <div className="nuvem-credito">
+        <span>Dados: lichess.org · conectado</span>
+        <button className="nuvem-sair" onClick={onSair}>
+          Sair
+        </button>
+      </div>
     </div>
   );
 }

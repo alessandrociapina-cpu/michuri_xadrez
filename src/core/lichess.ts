@@ -6,6 +6,11 @@
 //
 // IMPORTANTE: o host correto do explorer é "explorer.lichess.org". O antigo
 // "explorer.lichess.ovh" foi descontinuado e passou a responder 401.
+//
+// Desde 2026 o explorer EXIGE autenticação: enviamos o token OAuth do usuário
+// (ver lichessAuth.ts) no cabeçalho Authorization.
+import { getToken } from './lichessAuth';
+
 const EXPLORER = 'https://explorer.lichess.org/masters';
 
 export type TipoErro = 'offline' | 'limite' | 'recusado' | 'bloqueio' | 'status' | 'timeout';
@@ -26,9 +31,12 @@ async function buscarJson(url: string, signal?: AbortSignal, timeoutMs = 9000): 
   const aoAbortar = () => ctrl.abort();
   signal?.addEventListener('abort', aoAbortar, { once: true });
   const timer = setTimeout(() => ctrl.abort(), timeoutMs);
+  const headers: Record<string, string> = { Accept: 'application/json' };
+  const token = getToken();
+  if (token) headers.Authorization = `Bearer ${token}`;
   let r: Response;
   try {
-    r = await fetch(url, { signal: ctrl.signal, headers: { Accept: 'application/json' } });
+    r = await fetch(url, { signal: ctrl.signal, headers });
   } catch (e) {
     if (signal?.aborted) throw e; // cancelamento legítimo (troca de posição)
     if (ctrl.signal.aborted) throw new LichessErro('timeout', 'O Lichess demorou a responder.');

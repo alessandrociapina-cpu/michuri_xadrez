@@ -26,12 +26,17 @@ export class LichessErro extends Error {
   }
 }
 
-async function buscarJson(url: string, signal?: AbortSignal, timeoutMs = 9000): Promise<unknown> {
+async function requisitar(
+  url: string,
+  signal?: AbortSignal,
+  accept = 'application/json',
+  timeoutMs = 9000,
+): Promise<Response> {
   const ctrl = new AbortController();
   const aoAbortar = () => ctrl.abort();
   signal?.addEventListener('abort', aoAbortar, { once: true });
   const timer = setTimeout(() => ctrl.abort(), timeoutMs);
-  const headers: Record<string, string> = { Accept: 'application/json' };
+  const headers: Record<string, string> = { Accept: accept };
   const token = getToken();
   if (token) headers.Authorization = `Bearer ${token}`;
   let r: Response;
@@ -56,7 +61,7 @@ async function buscarJson(url: string, signal?: AbortSignal, timeoutMs = 9000): 
       'recusado',
       'O Lichess recusou o acesso (' +
         r.status +
-        '). Costuma ser uma extensão do navegador, VPN ou a rede bloqueando o site — tente em outra rede ou numa aba anônima sem extensões.',
+        '). Entre novamente com sua conta do Lichess (o login pode ter expirado).',
       r.status,
     );
   }
@@ -64,7 +69,7 @@ async function buscarJson(url: string, signal?: AbortSignal, timeoutMs = 9000): 
     throw new LichessErro('limite', 'Muitas consultas seguidas — aguarde alguns segundos.', 429);
   }
   if (!r.ok) throw new LichessErro('status', `O Lichess respondeu ${r.status}.`, r.status);
-  return r.json();
+  return r;
 }
 
 export type ExplorerMove = {
@@ -76,6 +81,7 @@ export type ExplorerMove = {
 };
 
 export type ExplorerGame = {
+  id: string;
   brancas: string;
   pretas: string;
   vencedor: 'white' | 'black' | 'draw';
@@ -93,12 +99,14 @@ export async function buscarExplorer(
   signal?: AbortSignal,
 ): Promise<ExplorerResultado> {
   const url = `${EXPLORER}?fen=${encodeURIComponent(fen)}&moves=10&topGames=4`;
-  const j = (await buscarJson(url, signal)) as {
+  const r = await requisitar(url, signal);
+  const j = (await r.json()) as {
     white?: number;
     draws?: number;
     black?: number;
     moves?: { san: string; white: number; draws: number; black: number }[];
     topGames?: {
+      id?: string;
       winner?: 'white' | 'black';
       white?: { name?: string };
       black?: { name?: string };
@@ -114,6 +122,7 @@ export async function buscarExplorer(
     jogos: (m.white ?? 0) + (m.draws ?? 0) + (m.black ?? 0),
   }));
   const partidas: ExplorerGame[] = (j.topGames ?? []).map((g) => ({
+    id: g.id ?? '',
     brancas: g.white?.name ?? '?',
     pretas: g.black?.name ?? '?',
     vencedor: g.winner ?? 'draw',
@@ -121,4 +130,12 @@ export async function buscarExplorer(
   }));
   const totalJogos = (j.white ?? 0) + (j.draws ?? 0) + (j.black ?? 0);
   return { totalJogos, lances, partidas };
+}
+
+/** Baixa o PGN de uma partida da base de mestres (texto PGN). */
+export async function buscarPgnMestre(id: string, signal?: AbortSignal): Promise<string> {
+  const r = await requisitar(`https://explorer.lichess.org/masters/pgn/${id}`, signal, 'application/x-chess-pgn');
+  const txt = (await r.text()).trim();
+  if (!txt) throw new LichessErro('status', 'PGN vazio retornado pelo Lichess.');
+  return txt;
 }

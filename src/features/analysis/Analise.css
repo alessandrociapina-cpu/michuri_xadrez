@@ -598,11 +598,44 @@
   flex-direction: column;
   gap: 5px;
 }
+.nuvem-partida-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
 .nuvem-partida {
   display: flex;
   align-items: baseline;
   gap: 8px;
   font-size: 13px;
+  width: 100%;
+  text-align: left;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  padding: 6px 8px;
+  cursor: pointer;
+  color: var(--bone);
+  transition: 0.12s;
+}
+.nuvem-partida:hover:not(:disabled) {
+  background: var(--ink-3);
+}
+.nuvem-partida.aberto {
+  background: var(--ink-3);
+  border-color: var(--gold-soft);
+}
+.nuvem-partida:disabled {
+  cursor: default;
+  opacity: 0.7;
+}
+.np-acoes {
+  display: flex;
+  gap: 8px;
+  padding: 0 8px 4px;
+}
+.np-acoes .btn {
+  flex: 1;
 }
 .np-res {
   font-family: 'JetBrains Mono', monospace;

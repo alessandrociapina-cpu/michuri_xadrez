@@ -17,8 +17,10 @@ import { miar, estaMudo, setMudo } from '../../core/meow';
 import { sanParaPtBr } from '../../core/notation';
 import {
   buscarExplorer,
+  buscarPgnMestre,
   LichessErro,
   type ExplorerResultado,
+  type ExplorerGame,
 } from '../../core/lichess';
 import { PARTIDAS_FAMOSAS, type JogoFamoso } from './famousGames';
 import './Analise.css';
@@ -141,6 +143,66 @@ export function Analise({
     setMostrarImport(false);
     setTocando(false);
   }, []);
+
+  // Carrega no tabuleiro um PGN qualquer (ex.: partida vinda do explorer do Lichess).
+  const carregarPgnTexto = useCallback((pgn: string): boolean => {
+    try {
+      const { sans: s } = lerPgn(pgn);
+      setSans(s);
+      setPly(0);
+      setRelatorio(null);
+      setJogo(null);
+      setAviso(undefined);
+      setMostrarImport(false);
+      setTocando(false);
+      setNuvemAberta(false); // foca no tabuleiro
+      return true;
+    } catch (e) {
+      setAviso((e as Error).message);
+      return false;
+    }
+  }, []);
+
+  // Estado da ação sobre uma partida do explorer (id em carregamento).
+  const [mestreCarregando, setMestreCarregando] = useState<string | null>(null);
+
+  const baixarMestre = useCallback(async (g: ExplorerGame) => {
+    if (!g.id) return;
+    setMestreCarregando(g.id);
+    setNuvemErro(undefined);
+    try {
+      const pgn = await buscarPgnMestre(g.id);
+      const nome = `${g.brancas}_${g.pretas}${g.ano ? '_' + g.ano : ''}`.replace(/[^\w]+/g, '_');
+      const blob = new Blob([pgn], { type: 'application/x-chess-pgn' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `${nome || g.id}.pgn`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch (e) {
+      setNuvemErro(e instanceof LichessErro ? e.message : 'Falha ao baixar o PGN.');
+    } finally {
+      setMestreCarregando(null);
+    }
+  }, []);
+
+  const analisarMestre = useCallback(
+    async (g: ExplorerGame) => {
+      if (!g.id) return;
+      setMestreCarregando(g.id);
+      setNuvemErro(undefined);
+      try {
+        const pgn = await buscarPgnMestre(g.id);
+        carregarPgnTexto(pgn);
+      } catch (e) {
+        setNuvemErro(e instanceof LichessErro ? e.message : 'Falha ao abrir a partida.');
+      } finally {
+        setMestreCarregando(null);
+      }
+    },
+    [carregarPgnTexto],
+  );
 
   const posicao = useMemo(() => {
     const c = new Chess();
@@ -692,6 +754,9 @@ export function Analise({
                 loginErro={lichessErro}
                 onEntrar={onEntrarLichess}
                 onSair={onSairLichess}
+                onAnalisarJogo={analisarMestre}
+                onBaixarJogo={baixarMestre}
+                carregandoId={mestreCarregando}
               />
             )}
           </div>
@@ -818,6 +883,9 @@ function NuvemPanel({
   loginErro,
   onEntrar,
   onSair,
+  onAnalisarJogo,
+  onBaixarJogo,
+  carregandoId,
 }: {
   dados: ExplorerResultado | null;
   carregando: boolean;
@@ -828,7 +896,11 @@ function NuvemPanel({
   loginErro?: string;
   onEntrar: () => void;
   onSair: () => void;
+  onAnalisarJogo: (g: ExplorerGame) => void;
+  onBaixarJogo: (g: ExplorerGame) => void;
+  carregandoId: string | null;
 }) {
+  const [selJogo, setSelJogo] = useState<number | null>(null);
   // Sem login: a base do Lichess exige autenticação. Mostra o convite a entrar.
   if (!logado) {
     return (
@@ -886,17 +958,41 @@ function NuvemPanel({
           {dados.partidas.length > 0 && (
             <div className="nuvem-partidas">
               <span className="lbl" style={{ margin: '4px 0' }}>
-                Partidas célebres daqui
+                Partidas célebres daqui · toque para abrir
               </span>
               {dados.partidas.map((g, i) => (
-                <div className="nuvem-partida" key={i}>
-                  <span className="np-res">
-                    {g.vencedor === 'white' ? '1–0' : g.vencedor === 'black' ? '0–1' : '½–½'}
-                  </span>
-                  <span className="np-nomes">
-                    {g.brancas} × {g.pretas}
-                  </span>
-                  {g.ano && <span className="np-ano">{g.ano}</span>}
+                <div className="nuvem-partida-wrap" key={i}>
+                  <button
+                    className={'nuvem-partida' + (selJogo === i ? ' aberto' : '')}
+                    onClick={() => setSelJogo(selJogo === i ? null : i)}
+                    disabled={!g.id}
+                  >
+                    <span className="np-res">
+                      {g.vencedor === 'white' ? '1–0' : g.vencedor === 'black' ? '0–1' : '½–½'}
+                    </span>
+                    <span className="np-nomes">
+                      {g.brancas} × {g.pretas}
+                    </span>
+                    {g.ano && <span className="np-ano">{g.ano}</span>}
+                  </button>
+                  {selJogo === i && g.id && (
+                    <div className="np-acoes">
+                      <button
+                        className="btn mini"
+                        disabled={carregandoId === g.id}
+                        onClick={() => onAnalisarJogo(g)}
+                      >
+                        {carregandoId === g.id ? 'abrindo…' : '▶ Analisar'}
+                      </button>
+                      <button
+                        className="btn mini"
+                        disabled={carregandoId === g.id}
+                        onClick={() => onBaixarJogo(g)}
+                      >
+                        ⬇ Baixar PGN
+                      </button>
+                    </div>
+                  )}
                 </div>
               ))}
             </div>

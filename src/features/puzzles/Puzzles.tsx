@@ -220,28 +220,10 @@ export function Puzzles({
   const verSolucao = useCallback(() => {
     if (!puzzle) return;
     limparTimers();
-    setStatus('revelado');
+    setDica(false);
+    setStatus('revelado'); // a seta verde + o texto mostram o lance certo
     setEstat(registrarResultado(false));
-    // Reproduz o restante da solução, lance a lance.
-    const tocarRestante = (i: number) => {
-      if (i >= puzzle.solucao.length) return;
-      const c = chessRef.current;
-      const uci = puzzle.solucao[i];
-      try {
-        c.move({
-          from: uci.slice(0, 2),
-          to: uci.slice(2, 4),
-          promotion: uci.length > 4 ? uci.slice(4) : undefined,
-        });
-      } catch {
-        return;
-      }
-      setFen(c.fen());
-      setUltimo([uci.slice(0, 2) as Key, uci.slice(2, 4) as Key]);
-      timerRef.current = setTimeout(() => tocarRestante(i + 1), 600);
-    };
-    tocarRestante(passo);
-  }, [puzzle, passo, limparTimers]);
+  }, [puzzle, limparTimers]);
 
   const proximo = useCallback(() => {
     if (fonte === 'lichess') {
@@ -253,25 +235,39 @@ export function Puzzles({
     }
   }, [fonte, proximoLichess, errosPuzzles, idxErro, carregar]);
 
-  // Seta/realce da dica: círculo na casa de origem do lance da solução.
+  // Marcações no tabuleiro:
+  //  - Dica: círculo azul na peça a mover (sem entregar o destino).
+  //  - Solução revelada: seta verde no lance certo.
   const shapes: DrawShape[] = [];
-  if (dica && puzzle && status === 'resolvendo') {
-    const sol = puzzle.solucao[passo];
-    if (sol && sol.length >= 2) shapes.push({ orig: sol.slice(0, 2) as Key, brush: 'blue' });
+  const solAtual = puzzle?.solucao[passo];
+  if (dica && puzzle && status === 'resolvendo' && solAtual && solAtual.length >= 2) {
+    shapes.push({ orig: solAtual.slice(0, 2) as Key, brush: 'blue' });
+  }
+  if (puzzle && status === 'revelado' && solAtual && solAtual.length >= 4) {
+    shapes.push({
+      orig: solAtual.slice(0, 2) as Key,
+      dest: solAtual.slice(2, 4) as Key,
+      brush: 'green',
+    });
   }
 
   const orient = puzzle?.orientacao ?? 'white';
+  const ladoTxt = orient === 'white' ? 'as brancas' : 'as pretas';
   const semErros = fonte === 'erro' && errosPuzzles.length === 0;
 
-  // Texto de status.
+  // Lance certo (em SAN PT-BR) a partir da posição atual — para texto e seta.
+  const lanceCerto =
+    puzzle && solAtual ? solucaoPtbr(chessRef.current.fen(), [solAtual]) : '';
+
+  // Texto de status (abaixo do tabuleiro).
   let feedback = '';
   if (semErros) feedback = '';
   else if (carregando) feedback = 'Carregando puzzle…';
-  else if (status === 'resolvido') feedback = tentou ? 'Resolvido! 🎉' : 'Resolvido sem errar! 🏆';
-  else if (status === 'revelado') feedback = 'Solução revelada.';
-  else if (status === 'errou') feedback = '✗ Não é o melhor — tente de novo.';
-  else if (status === 'acertou') feedback = '✓ Boa! Continue…';
-  else if (puzzle) feedback = `Sua vez (${orient === 'white' ? 'brancas' : 'pretas'}) — ache o melhor lance.`;
+  else if (status === 'resolvido') feedback = tentou ? '✓ Resolvido! 🎉' : '✓ Resolvido sem errar! 🏆';
+  else if (status === 'revelado') feedback = `O lance certo era ${lanceCerto || '—'} (seta verde).`;
+  else if (status === 'errou') feedback = '✗ Esse não. Tente outro lance.';
+  else if (status === 'acertou') feedback = '✓ Isso! Agora o próximo lance…';
+  else if (puzzle) feedback = `Arraste a peça e jogue o melhor lance para ${ladoTxt}.`;
 
   const acabou = status === 'resolvido' || status === 'revelado';
   const linhaSolucao = puzzle && acabou ? solucaoPtbr(puzzle.fen, puzzle.solucao) : '';
@@ -355,6 +351,13 @@ export function Puzzles({
           </div>
         ) : (
           <>
+            {puzzle && !acabou && (
+              <div className="pz-objetivo">
+                🎯 <strong>Ache o melhor lance para {ladoTxt}</strong> e jogue-o arrastando a peça no
+                tabuleiro.
+              </div>
+            )}
+
             {puzzle && (
               <div className="pz-info">
                 {puzzle.titulo && <div className="pz-titulo">{puzzle.titulo}</div>}
@@ -375,7 +378,14 @@ export function Puzzles({
               </div>
             )}
 
-            {acabou && linhaSolucao && (
+            {status === 'revelado' && (
+              <div className="pz-solucao destaque">
+                <span className="pz-sol-rot">Lance certo</span>
+                <span className="pz-sol-mv">{lanceCerto || '—'}</span>
+                {linhaSolucao && <span className="pz-sol-linha">sequência: {linhaSolucao}</span>}
+              </div>
+            )}
+            {status === 'resolvido' && linhaSolucao && (
               <div className="pz-solucao">
                 Solução: <strong>{linhaSolucao}</strong>
               </div>
@@ -384,18 +394,32 @@ export function Puzzles({
             <div className="pz-acoes">
               {!acabou && (
                 <>
-                  <button className="btn" onClick={() => setDica(true)} disabled={!puzzle}>
+                  <button
+                    className="btn"
+                    onClick={() => setDica(true)}
+                    disabled={!puzzle || dica}
+                    title="Destaca a peça que deve ser movida"
+                  >
                     💡 Dica
                   </button>
                   <button className="btn" onClick={verSolucao} disabled={!puzzle}>
-                    Ver solução
+                    👁 Ver solução
                   </button>
                 </>
               )}
               <button className="btn primary" onClick={proximo} disabled={carregando}>
+                {acabou ? '➜ ' : ''}
                 {fonte === 'lichess' ? 'Próximo puzzle' : 'Próximo'}
               </button>
             </div>
+
+            {!acabou && (
+              <p className="pz-comofunciona">
+                Como funciona: você vê uma posição real e deve jogar o melhor lance (o que um
+                campeão jogaria). Errou? tente de novo. Travou? use a <strong>Dica</strong> ou{' '}
+                <strong>Ver solução</strong>.
+              </p>
+            )}
           </>
         )}
       </div>

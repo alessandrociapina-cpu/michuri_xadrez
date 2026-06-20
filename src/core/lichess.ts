@@ -33,13 +33,16 @@ async function requisitar(
   signal?: AbortSignal,
   accept = 'application/json',
   timeoutMs = 9000,
+  // Endpoints PÚBLICOS que declaram um escopo (ex.: /api/puzzle/next) rejeitam
+  // (403) um token sem aquele escopo; chamamos esses de forma anônima (auth=false).
+  auth = true,
 ): Promise<Response> {
   const ctrl = new AbortController();
   const aoAbortar = () => ctrl.abort();
   signal?.addEventListener('abort', aoAbortar, { once: true });
   const timer = setTimeout(() => ctrl.abort(), timeoutMs);
   const headers: Record<string, string> = { Accept: accept };
-  const token = getToken();
+  const token = auth ? getToken() : null;
   if (token) headers.Authorization = `Bearer ${token}`;
   let r: Response;
   try {
@@ -145,7 +148,15 @@ export async function buscarPuzzleLichess(
   signal?: AbortSignal,
 ): Promise<Puzzle> {
   const qs = dificuldade ? `?difficulty=${dificuldade}` : '';
-  const r = await requisitar(`https://lichess.org/api/puzzle/next${qs}`, signal);
+  // Anônimo (auth=false): o puzzle é público e um token sem escopo puzzle:read
+  // levaria a 403. Assim funciona logado ou não.
+  const r = await requisitar(
+    `https://lichess.org/api/puzzle/next${qs}`,
+    signal,
+    'application/json',
+    9000,
+    false,
+  );
   const j = (await r.json()) as {
     game?: { pgn?: string };
     puzzle: {

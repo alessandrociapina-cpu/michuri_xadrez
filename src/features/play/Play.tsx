@@ -18,6 +18,7 @@ import {
   type Move,
 } from '../../core/chess';
 import { Engine, NIVEIS, type Nivel, type LiveInfo } from '../../core/engine';
+import { useSettings } from '../../core/settings';
 import { sanParaPtBr } from '../../core/notation';
 import { detectarAbertura } from '../../core/openingDetect';
 import { gerarPgn } from '../../core/pgn';
@@ -46,8 +47,8 @@ export function Play({
   const chessRef = useRef<Chess>(new Chess());
   const engineRef = useRef<Engine | null>(null);
 
-  const [nivel, setNivel] = useState<Nivel>('intermediario');
-  const [lado, setLado] = useState<Lado>('white');
+  // Nível e lado vêm das Configurações globais (persistidos, fora do painel).
+  const { nivel, lado } = useSettings();
   const [fen, setFen] = useState<string>(chessRef.current.fen());
   // Histórico em SAN inglês (fonte para notação e detecção de abertura).
   const [sanHist, setSanHist] = useState<string[]>([]);
@@ -352,35 +353,12 @@ export function Play({
       </div>
 
       <div className="panel">
-        <div className="cfg">
-          <div>
-            <label className="lbl" htmlFor="nivel">
-              Nível do motor
-            </label>
-            <select
-              id="nivel"
-              value={nivel}
-              onChange={(e) => setNivel(e.target.value as Nivel)}
-            >
-              {(Object.keys(NIVEIS) as Nivel[]).map((n) => (
-                <option key={n} value={n}>
-                  {NIVEIS[n].rotulo}
-                </option>
-              ))}
-            </select>
-            <div className="hint">{descricaoNivel(nivel)}</div>
-          </div>
-
-          <div>
-            <label className="lbl" htmlFor="lado">
-              Você joga de
-            </label>
-            <select id="lado" value={lado} onChange={(e) => setLado(e.target.value as Lado)}>
-              <option value="white">Brancas</option>
-              <option value="black">Pretas</option>
-            </select>
-            <div className="hint">A escolha vale a partir da próxima partida.</div>
-          </div>
+        <div className="cfg-resumo">
+          <span>
+            <strong>{NIVEIS[nivel].rotulo}</strong> · você joga de{' '}
+            <strong>{lado === 'white' ? 'brancas' : 'pretas'}</strong>
+          </span>
+          <span className="cfg-resumo-dica">{descricaoNivel(nivel)} — ajuste em ⚙ Configurações.</span>
         </div>
 
         <div className="actions">

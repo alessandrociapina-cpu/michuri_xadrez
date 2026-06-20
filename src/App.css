@@ -75,3 +75,20 @@
   color: var(--ink);
   font-weight: 700;
 }
+
+.cfg-btn {
+  flex: none;
+  width: 42px;
+  height: 42px;
+  font-size: 19px;
+  background: var(--ink-2);
+  border: 1px solid var(--line);
+  border-radius: 99px;
+  color: var(--bone);
+  cursor: pointer;
+  transition: 0.15s;
+}
+.cfg-btn:hover {
+  border-color: var(--gold);
+  color: var(--gold);
+}

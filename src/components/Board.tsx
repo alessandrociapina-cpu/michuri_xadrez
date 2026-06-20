@@ -1,18 +1,30 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, type CSSProperties } from 'react';
 import { Chessground } from 'chessground';
 import type { Api } from 'chessground/api';
 import type { Config } from 'chessground/config';
 import type { Key } from 'chessground/types';
 import type { DrawShape } from 'chessground/draw';
+import { useSettings, getSettings, PALETAS } from '../core/settings';
+import { tocarMovimento } from '../core/somPecas';
 
-// Tabuleiro COMPARTILHADO pelos dois módulos (Jogar e Aberturas). É só a camada
-// de renderização (chessground); a fonte da verdade do estado continua sendo o
-// chess.js, que nos entrega FEN, destinos legais e o último lance.
+// Tabuleiro COMPARTILHADO pelos módulos (Jogar, Aberturas, Análise). É só a
+// camada de renderização (chessground); a fonte da verdade do estado continua
+// sendo o chess.js, que nos entrega FEN, destinos legais e o último lance.
 
 import 'chessground/assets/chessground.base.css';
 import 'chessground/assets/chessground.brown.css';
 import 'chessground/assets/chessground.cburnett.css';
 import './Board.css';
+
+/** Data URI do padrão xadrez (2×2 casas) com as cores da paleta escolhida. */
+function svgTabuleiro(light: string, dark: string): string {
+  const svg =
+    `<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 2 2' shape-rendering='crispEdges'>` +
+    `<rect width='2' height='2' fill='${light}'/>` +
+    `<rect x='1' y='0' width='1' height='1' fill='${dark}'/>` +
+    `<rect x='0' y='1' width='1' height='1' fill='${dark}'/></svg>`;
+  return `url("data:image/svg+xml,${encodeURIComponent(svg)}")`;
+}
 
 export type BoardProps = {
   /** Posição atual em FEN. */
@@ -56,6 +68,26 @@ export function Board({
   // Mantém o onMove mais recente sem recriar a config a cada render.
   const onMoveRef = useRef<typeof onMove>(onMove);
   onMoveRef.current = onMove;
+
+  // Aparência (tabuleiro/peças) vem das preferências globais.
+  const { tema, material } = useSettings();
+  const paleta = PALETAS[tema];
+
+  // Som ao mover: tocamos quando o "último lance" muda para um novo (cobre todos
+  // os módulos automaticamente). Pulamos a 1ª renderização para não soar no load.
+  const lastKey = lastMove ? lastMove.join('') : '';
+  const prevLastRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (prevLastRef.current === null) {
+      prevLastRef.current = lastKey;
+      return;
+    }
+    if (lastKey && lastKey !== prevLastRef.current) {
+      const s = getSettings();
+      if (s.somMover) tocarMovimento(s.material);
+    }
+    prevLastRef.current = lastKey;
+  }, [lastKey]);
 
   // Cria a instância uma única vez.
   useEffect(() => {
@@ -129,7 +161,17 @@ export function Board({
         ))}
       </div>
       <div className="board-frame">
-        <div ref={elRef} className="cg-host" />
+        <div
+          ref={elRef}
+          className="cg-host"
+          data-material={material}
+          style={
+            {
+              '--board-bg': svgTabuleiro(paleta.light, paleta.dark),
+              '--sq-light': paleta.light,
+            } as CSSProperties
+          }
+        />
       </div>
       <div className="coord-files" aria-hidden="true">
         {files.map((f) => (

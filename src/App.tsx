@@ -4,6 +4,7 @@ import { Trainer } from './features/openings/Trainer';
 import { Analise } from './features/analysis/Analise';
 import { Michuri } from './components/Michuri';
 import { Splash } from './components/Splash';
+import { Configuracoes } from './components/Configuracoes';
 import {
   ehRetornoOAuth,
   estaLogado,
@@ -25,6 +26,8 @@ export function App() {
   // Estado de login no Lichess.
   const [lichessLogado, setLichessLogado] = useState(estaLogado());
   const [lichessErro, setLichessErro] = useState<string | undefined>();
+
+  const [cfgAberta, setCfgAberta] = useState(false);
 
   // No boot: se a URL for um retorno do OAuth, conclui o login e abre a Análise.
   useEffect(() => {
@@ -95,7 +98,17 @@ export function App() {
             Análise
           </button>
         </nav>
+        <button
+          className="cfg-btn"
+          onClick={() => setCfgAberta(true)}
+          aria-label="Configurações"
+          title="Configurações"
+        >
+          ⚙
+        </button>
       </header>
+
+      {cfgAberta && <Configuracoes onFechar={() => setCfgAberta(false)} />}
 
       <main className="app-main">
         {/* Mantemos as telas montadas para preservar o estado (partida em

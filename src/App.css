@@ -78,17 +78,33 @@
 
 .cfg-btn {
   flex: none;
-  width: 42px;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
   height: 42px;
-  font-size: 19px;
+  padding: 0 16px;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 13px;
   background: var(--ink-2);
-  border: 1px solid var(--line);
+  border: 1px solid var(--gold-soft);
   border-radius: 99px;
-  color: var(--bone);
+  color: var(--gold);
   cursor: pointer;
   transition: 0.15s;
 }
+.cfg-btn span[aria-hidden='true'] {
+  font-size: 17px;
+}
 .cfg-btn:hover {
   border-color: var(--gold);
-  color: var(--gold);
+  background: var(--ink-3);
+}
+/* Em telas estreitas, mantém o ícone + texto curto (cabe; o cabeçalho quebra). */
+@media (max-width: 380px) {
+  .cfg-btn-tx {
+    display: none;
+  }
+  .cfg-btn {
+    padding: 0 13px;
+  }
 }

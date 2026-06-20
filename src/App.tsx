@@ -101,10 +101,11 @@ export function App() {
         <button
           className="cfg-btn"
           onClick={() => setCfgAberta(true)}
-          aria-label="Configurações"
-          title="Configurações"
+          aria-label="Abrir configurações"
+          title="Configurações: nível, lado, tabuleiro, peças e som"
         >
-          ⚙
+          <span aria-hidden="true">⚙</span>
+          <span className="cfg-btn-tx">Configurações</span>
         </button>
       </header>
 

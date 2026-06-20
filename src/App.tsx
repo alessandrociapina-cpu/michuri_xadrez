@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { Play } from './features/play/Play';
 import { Trainer } from './features/openings/Trainer';
 import { Analise } from './features/analysis/Analise';
+import { Puzzles } from './features/puzzles/Puzzles';
 import { Michuri } from './components/Michuri';
 import { Splash } from './components/Splash';
 import { Configuracoes } from './components/Configuracoes';
@@ -12,9 +13,10 @@ import {
   logout,
   tratarRedirect,
 } from './core/lichessAuth';
+import type { Puzzle } from './core/puzzles';
 import './App.css';
 
-type Aba = 'jogar' | 'aberturas' | 'analise';
+type Aba = 'jogar' | 'aberturas' | 'analise' | 'puzzles';
 
 export function App() {
   const [aba, setAba] = useState<Aba>('jogar');
@@ -28,6 +30,16 @@ export function App() {
   const [lichessErro, setLichessErro] = useState<string | undefined>();
 
   const [cfgAberta, setCfgAberta] = useState(false);
+
+  // Puzzles gerados a partir dos erros da última partida analisada.
+  const [errosPuzzles, setErrosPuzzles] = useState<Puzzle[]>([]);
+  const [abrirErros, setAbrirErros] = useState(0);
+
+  const receberErros = useCallback((p: Puzzle[]) => setErrosPuzzles(p), []);
+  const treinarErros = useCallback(() => {
+    setAba('puzzles');
+    setAbrirErros((n) => n + 1);
+  }, []);
 
   // No boot: se a URL for um retorno do OAuth, conclui o login e abre a Análise.
   useEffect(() => {
@@ -97,6 +109,13 @@ export function App() {
           >
             Análise
           </button>
+          <button
+            className={'navbtn' + (aba === 'puzzles' ? ' on' : '')}
+            onClick={() => setAba('puzzles')}
+            aria-pressed={aba === 'puzzles'}
+          >
+            Puzzles
+          </button>
         </nav>
         <button
           className="cfg-btn"
@@ -128,7 +147,12 @@ export function App() {
             lichessErro={lichessErro}
             onEntrarLichess={entrarLichess}
             onSairLichess={sairLichess}
+            onErrosPuzzles={receberErros}
+            onTreinarErros={treinarErros}
           />
+        </section>
+        <section hidden={aba !== 'puzzles'} aria-hidden={aba !== 'puzzles'}>
+          <Puzzles ativo={aba === 'puzzles'} errosPuzzles={errosPuzzles} abrirErros={abrirErros} />
         </section>
       </main>
     </div>

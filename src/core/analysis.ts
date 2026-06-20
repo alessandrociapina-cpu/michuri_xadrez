@@ -34,6 +34,10 @@ export type LanceAnalisado = {
   fenDepois: string;
   /** Melhor lance do motor naquela posição, em SAN PT-BR. */
   melhorPtbr?: string;
+  /** Melhor lance do motor em UCI (ex.: "e2e4") — usado para gerar puzzles. */
+  melhorUci?: string;
+  /** FEN ANTES do lance (posição em que o jogador errou) — para puzzles. */
+  fenAntes: string;
   /** Avaliação (cp, perspectiva das BRANCAS) antes e depois do lance. */
   avalAntesBrancas: number;
   avalDepoisBrancas: number;
@@ -256,7 +260,9 @@ export async function analisarPartida(
       san: lances[k].san,
       ptbr: sanParaPtBr(lances[k].san),
       fenDepois: fens[k + 1],
+      fenAntes: fens[k],
       melhorPtbr: uciParaPtbr(fens[k], melhorUci[k]),
+      melhorUci: melhorUci[k],
       avalAntesBrancas: evalBrancas(k),
       avalDepoisBrancas: evalBrancas(k + 1),
       perda,

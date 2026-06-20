@@ -10,6 +10,8 @@
 // Desde 2026 o explorer EXIGE autenticação: enviamos o token OAuth do usuário
 // (ver lichessAuth.ts) no cabeçalho Authorization.
 import { getToken } from './lichessAuth';
+import { Chess } from './chess';
+import type { Puzzle } from './puzzles';
 
 const EXPLORER = 'https://explorer.lichess.org/masters';
 
@@ -130,6 +132,60 @@ export async function buscarExplorer(
   }));
   const totalJogos = (j.white ?? 0) + (j.draws ?? 0) + (j.black ?? 0);
   return { totalJogos, lances, partidas };
+}
+
+export type DificuldadePuzzle = 'easiest' | 'easier' | 'normal' | 'harder' | 'hardest';
+
+/**
+ * Busca um puzzle do Lichess (endpoint público /api/puzzle/next, com CORS).
+ * Logado, retorna puzzles ainda não vistos. Aceita filtro de dificuldade.
+ */
+export async function buscarPuzzleLichess(
+  dificuldade?: DificuldadePuzzle,
+  signal?: AbortSignal,
+): Promise<Puzzle> {
+  const qs = dificuldade ? `?difficulty=${dificuldade}` : '';
+  const r = await requisitar(`https://lichess.org/api/puzzle/next${qs}`, signal);
+  const j = (await r.json()) as {
+    game?: { pgn?: string };
+    puzzle: {
+      id: string;
+      fen?: string;
+      initialPly?: number;
+      lastMove?: string;
+      solution: string[];
+      rating?: number;
+      themes?: string[];
+    };
+  };
+
+  // A API moderna já entrega o FEN; por segurança, caímos para o PGN + initialPly.
+  let fen = j.puzzle.fen;
+  if (!fen && j.game?.pgn && j.puzzle.initialPly != null) {
+    const c = new Chess();
+    const moves = j.game.pgn.split(/\s+/).filter(Boolean);
+    for (let i = 0; i < j.puzzle.initialPly && i < moves.length; i++) {
+      try {
+        c.move(moves[i]);
+      } catch {
+        break;
+      }
+    }
+    fen = c.fen();
+  }
+  if (!fen) throw new LichessErro('status', 'Puzzle sem posição utilizável.');
+
+  const lm = j.puzzle.lastMove;
+  return {
+    id: j.puzzle.id,
+    fen,
+    solucao: j.puzzle.solution ?? [],
+    orientacao: fen.split(' ')[1] === 'w' ? 'white' : 'black',
+    lance: lm && lm.length >= 4 ? [lm.slice(0, 2), lm.slice(2, 4)] : undefined,
+    fonte: 'lichess',
+    rating: j.puzzle.rating,
+    temas: j.puzzle.themes,
+  };
 }
 
 /** Baixa o PGN de uma partida da base de mestres (texto PGN). */

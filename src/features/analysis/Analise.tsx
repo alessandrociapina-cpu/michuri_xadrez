@@ -22,6 +22,7 @@ import {
   type ExplorerResultado,
   type ExplorerGame,
 } from '../../core/lichess';
+import { gerarPuzzlesDeErros, type Puzzle } from '../../core/puzzles';
 import { PARTIDAS_FAMOSAS, type JogoFamoso } from './famousGames';
 import './Analise.css';
 
@@ -45,6 +46,8 @@ export function Analise({
   lichessErro,
   onEntrarLichess,
   onSairLichess,
+  onErrosPuzzles,
+  onTreinarErros,
 }: {
   ativo: boolean;
   pgnInicial?: string;
@@ -52,6 +55,8 @@ export function Analise({
   lichessErro?: string;
   onEntrarLichess: () => void;
   onSairLichess: () => void;
+  onErrosPuzzles: (p: Puzzle[]) => void;
+  onTreinarErros: () => void;
 }) {
   const engineRef = useRef<Engine | null>(null);
   const abortarRef = useRef(false);
@@ -405,6 +410,7 @@ export function Analise({
       if (rel) {
         setRelatorio(rel);
         setPly(0);
+        onErrosPuzzles(gerarPuzzlesDeErros(rel)); // alimenta o "Treine seus erros"
       }
     } catch (e) {
       setAviso(`Falha na análise: ${(e as Error).message}`);
@@ -714,6 +720,12 @@ export function Analise({
 
         {relatorio && <Resumo relatorio={relatorio} />}
 
+        {relatorio && qtdErros(relatorio) > 0 && (
+          <button className="btn primary ana-treinar" onClick={onTreinarErros}>
+            🎯 Treinar meus erros ({qtdErros(relatorio)})
+          </button>
+        )}
+
         {relatorio && relatorio.lances.length > 1 && (
           <div className="ana-grafico-bloco">
             <div className="grafico-head">
@@ -794,6 +806,11 @@ export function Analise({
       </div>
     </div>
   );
+}
+
+/** Quantos lances viram puzzle (erros e erros graves). */
+function qtdErros(rel: Relatorio): number {
+  return rel.lances.filter((l) => l.classe === 'erro' || l.classe === 'errograve').length;
 }
 
 /** Rótulo "12." (brancas) ou "12..." (pretas) para o lance no índice ply-1. */

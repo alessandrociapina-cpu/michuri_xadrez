@@ -187,32 +187,29 @@ export async function buscarPuzzleLichess(
   }
   if (!fenBase) throw new LichessErro('status', 'Puzzle sem posição utilizável.');
 
-  // CONVENÇÃO DO LICHESS: solution[0] é o lance do ADVERSÁRIO (jogado para armar
-  // o problema). Aplicamo-lo para chegar à posição que o jogador deve resolver;
-  // a partir daí o jogador joga solution[1], solution[3], … Por isso o solver é
-  // o lado que tem a vez DEPOIS desse lance.
+  // CONVENÇÃO DO LICHESS: solution[0] é SEMPRE o lance do ADVERSÁRIO (o "setup"
+  // que arma o problema) — nunca a resposta do jogador. Por isso a solução do
+  // JOGADOR é sempre solution[1..]. Quanto à posição:
+  //   • se o fen vem ANTES do setup, solution[0] é legal e o aplicamos;
+  //   • se o fen já vem DEPOIS do setup (caso da API), solution[0] é ilegal
+  //     (já foi jogado) e mantemos o fen como está.
+  // Em ambos os casos chegamos à posição em que é a vez do jogador resolver.
   const sol = j.puzzle.solution ?? [];
   const chess = new Chess(fenBase);
-  let aplicouSetup = false;
   let lance: [string, string] | undefined;
-  if (sol.length > 0) {
+  if (sol.length > 1) {
     const m0 = sol[0];
+    lance = [m0.slice(0, 2), m0.slice(2, 4)]; // destaque do lance que armou o puzzle
     try {
-      const ok = chess.move({
+      chess.move({
         from: m0.slice(0, 2),
         to: m0.slice(2, 4),
         promotion: m0.length > 4 ? m0.slice(4) : undefined,
       });
-      if (ok) {
-        aplicouSetup = true;
-        lance = [m0.slice(0, 2), m0.slice(2, 4)];
-      }
     } catch {
-      aplicouSetup = false;
+      /* setup já refletido no fen — não aplica */
     }
-  }
-  if (!aplicouSetup) {
-    // Defensivo: se o setup não era legal, a FEN já é a do solver.
+  } else {
     const lm = j.puzzle.lastMove;
     lance = lm && lm.length >= 4 ? [lm.slice(0, 2), lm.slice(2, 4)] : undefined;
   }
@@ -220,7 +217,7 @@ export async function buscarPuzzleLichess(
   return {
     id: j.puzzle.id,
     fen: fenSolver,
-    solucao: aplicouSetup ? sol.slice(1) : sol,
+    solucao: sol.length > 1 ? sol.slice(1) : sol,
     orientacao: fenSolver.split(' ')[1] === 'w' ? 'white' : 'black',
     lance,
     fonte: 'lichess',

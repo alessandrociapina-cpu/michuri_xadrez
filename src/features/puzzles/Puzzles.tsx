@@ -267,7 +267,7 @@ export function Puzzles({
   else if (status === 'revelado') feedback = `O lance certo era ${lanceCerto || '—'} (seta verde).`;
   else if (status === 'errou') feedback = '✗ Esse não. Tente outro lance.';
   else if (status === 'acertou') feedback = '✓ Isso! Agora o próximo lance…';
-  else if (puzzle) feedback = `Arraste a peça e jogue o melhor lance para ${ladoTxt}.`;
+  else if (puzzle) feedback = `Sua vez — ache o melhor lance para ${ladoTxt}.`;
 
   const acabou = status === 'resolvido' || status === 'revelado';
   const linhaSolucao = puzzle && acabou ? solucaoPtbr(puzzle.fen, puzzle.solucao) : '';
@@ -353,8 +353,7 @@ export function Puzzles({
           <>
             {puzzle && !acabou && (
               <div className="pz-objetivo">
-                🎯 <strong>Ache o melhor lance para {ladoTxt}</strong> e jogue-o arrastando a peça no
-                tabuleiro.
+                🎯 <strong>Ache o melhor lance para {ladoTxt}.</strong>
               </div>
             )}
 

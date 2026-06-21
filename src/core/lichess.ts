@@ -170,9 +170,10 @@ export async function buscarPuzzleLichess(
     };
   };
 
-  // A API moderna já entrega o FEN; por segurança, caímos para o PGN + initialPly.
-  let fen = j.puzzle.fen;
-  if (!fen && j.game?.pgn && j.puzzle.initialPly != null) {
+  // FEN base = posição ANTES do lance que arma o puzzle. A API pode entregar o
+  // FEN; senão, reconstruímos do PGN + initialPly.
+  let fenBase = j.puzzle.fen;
+  if (!fenBase && j.game?.pgn && j.puzzle.initialPly != null) {
     const c = new Chess();
     const moves = j.game.pgn.split(/\s+/).filter(Boolean);
     for (let i = 0; i < j.puzzle.initialPly && i < moves.length; i++) {
@@ -182,17 +183,46 @@ export async function buscarPuzzleLichess(
         break;
       }
     }
-    fen = c.fen();
+    fenBase = c.fen();
   }
-  if (!fen) throw new LichessErro('status', 'Puzzle sem posição utilizável.');
+  if (!fenBase) throw new LichessErro('status', 'Puzzle sem posição utilizável.');
 
-  const lm = j.puzzle.lastMove;
+  // CONVENÇÃO DO LICHESS: solution[0] é o lance do ADVERSÁRIO (jogado para armar
+  // o problema). Aplicamo-lo para chegar à posição que o jogador deve resolver;
+  // a partir daí o jogador joga solution[1], solution[3], … Por isso o solver é
+  // o lado que tem a vez DEPOIS desse lance.
+  const sol = j.puzzle.solution ?? [];
+  const chess = new Chess(fenBase);
+  let aplicouSetup = false;
+  let lance: [string, string] | undefined;
+  if (sol.length > 0) {
+    const m0 = sol[0];
+    try {
+      const ok = chess.move({
+        from: m0.slice(0, 2),
+        to: m0.slice(2, 4),
+        promotion: m0.length > 4 ? m0.slice(4) : undefined,
+      });
+      if (ok) {
+        aplicouSetup = true;
+        lance = [m0.slice(0, 2), m0.slice(2, 4)];
+      }
+    } catch {
+      aplicouSetup = false;
+    }
+  }
+  if (!aplicouSetup) {
+    // Defensivo: se o setup não era legal, a FEN já é a do solver.
+    const lm = j.puzzle.lastMove;
+    lance = lm && lm.length >= 4 ? [lm.slice(0, 2), lm.slice(2, 4)] : undefined;
+  }
+  const fenSolver = chess.fen();
   return {
     id: j.puzzle.id,
-    fen,
-    solucao: j.puzzle.solution ?? [],
-    orientacao: fen.split(' ')[1] === 'w' ? 'white' : 'black',
-    lance: lm && lm.length >= 4 ? [lm.slice(0, 2), lm.slice(2, 4)] : undefined,
+    fen: fenSolver,
+    solucao: aplicouSetup ? sol.slice(1) : sol,
+    orientacao: fenSolver.split(' ')[1] === 'w' ? 'white' : 'black',
+    lance,
     fonte: 'lichess',
     rating: j.puzzle.rating,
     temas: j.puzzle.themes,

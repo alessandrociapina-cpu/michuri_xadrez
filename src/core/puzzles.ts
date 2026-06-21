@@ -93,12 +93,23 @@ export function lerEstat(): EstatPuzzle {
   }
 }
 
-export function registrarResultado(acertou: boolean): EstatPuzzle {
+/**
+ * Atualiza as estatísticas:
+ *  - resolvido: contabiliza em "resolvidos" (todo puzzle resolvido conta,
+ *    mesmo que com erros);
+ *  - limpo: resolvido SEM erros → aumenta a sequência (e o recorde).
+ *  Se não foi resolvido (ex.: viu a solução), a sequência zera.
+ */
+export function registrarResultado(resolvido: boolean, limpo: boolean): EstatPuzzle {
   const e = lerEstat();
-  if (acertou) {
+  if (resolvido) {
     e.resolvidos += 1;
-    e.sequencia += 1;
-    e.recorde = Math.max(e.recorde, e.sequencia);
+    if (limpo) {
+      e.sequencia += 1;
+      e.recorde = Math.max(e.recorde, e.sequencia);
+    } else {
+      e.sequencia = 0;
+    }
   } else {
     e.sequencia = 0;
   }

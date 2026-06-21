@@ -128,10 +128,10 @@ export function Puzzles({
   );
 
   const concluir = useCallback(
-    (acertouLimpo: boolean) => {
+    (limpo: boolean) => {
       setStatus('resolvido');
-      setEstat(registrarResultado(acertouLimpo));
-      miar(acertouLimpo ? 2 : 1);
+      setEstat(registrarResultado(true, limpo)); // resolvido conta sempre
+      miar(limpo ? 2 : 1);
     },
     [],
   );
@@ -222,7 +222,7 @@ export function Puzzles({
     limparTimers();
     setDica(false);
     setStatus('revelado'); // a seta verde + o texto mostram o lance certo
-    setEstat(registrarResultado(false));
+    setEstat(registrarResultado(false, false)); // viu a solução: não conta como resolvido
   }, [puzzle, limparTimers]);
 
   const proximo = useCallback(() => {

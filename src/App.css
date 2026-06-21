@@ -99,8 +99,39 @@
   border-color: var(--gold);
   background: var(--ink-3);
 }
-/* Em telas estreitas, mantém o ícone + texto curto (cabe; o cabeçalho quebra). */
-@media (max-width: 380px) {
+/* No celular, com 4 abas, a barra de navegação não cabe na mesma linha da marca.
+   Reorganizamos: marca + Configurações na 1ª linha, e a barra de abas numa linha
+   PRÓPRIA, ocupando a largura toda, com os botões divididos por igual. */
+@media (max-width: 620px) {
+  .app-top {
+    align-items: center;
+    row-gap: 14px;
+  }
+  .brand {
+    order: 1;
+  }
+  .cfg-btn {
+    order: 2;
+    margin-left: auto;
+  }
+  .app-nav {
+    order: 3;
+    flex-basis: 100%;
+    width: 100%;
+  }
+  .navbtn {
+    flex: 1;
+    padding: 9px 4px;
+    font-size: 12px;
+    letter-spacing: 0;
+    text-align: center;
+    white-space: nowrap;
+  }
+}
+
+/* Telas bem estreitas: o botão de Configurações fica só com o ícone, para a 1ª
+   linha (marca + ⚙) caber. */
+@media (max-width: 430px) {
   .cfg-btn-tx {
     display: none;
   }

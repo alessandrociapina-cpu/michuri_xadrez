@@ -170,60 +170,124 @@ export async function buscarPuzzleLichess(
     };
   };
 
-  // FEN base = posição ANTES do lance que arma o puzzle. A API pode entregar o
-  // FEN; senão, reconstruímos do PGN + initialPly.
-  let fenBase = j.puzzle.fen;
-  if (!fenBase && j.game?.pgn && j.puzzle.initialPly != null) {
+  const sol = j.puzzle.solution ?? [];
+  if (sol.length === 0) throw new LichessErro('status', 'Puzzle sem solução.');
+
+  // Montagem ROBUSTA: em vez de confiar numa única convenção (que variava e
+  // gerava setas ilegais), montamos candidatos de posição inicial e escolhemos a
+  // interpretação em que TODA a solução é legal. Assim a posição e os lances
+  // mostrados são sempre consistentes.
+  const candidatos: { fen: string; lance?: [string, string] }[] = [];
+  // 1) Reconstrução canônica: game.pgn reproduzido até initialPly.
+  if (j.game?.pgn && j.puzzle.initialPly != null) {
     const c = new Chess();
-    const moves = j.game.pgn.split(/\s+/).filter(Boolean);
-    for (let i = 0; i < j.puzzle.initialPly && i < moves.length; i++) {
+    for (const san of sanDoPgn(j.game.pgn).slice(0, j.puzzle.initialPly)) {
       try {
-        c.move(moves[i]);
+        c.move(san);
       } catch {
         break;
       }
     }
-    fenBase = c.fen();
+    const hist = c.history({ verbose: true });
+    const last = hist[hist.length - 1];
+    candidatos.push({
+      fen: c.fen(),
+      lance: last ? [last.from, last.to] : undefined,
+    });
   }
-  if (!fenBase) throw new LichessErro('status', 'Puzzle sem posição utilizável.');
-
-  // CONVENÇÃO DO LICHESS: solution[0] é SEMPRE o lance do ADVERSÁRIO (o "setup"
-  // que arma o problema) — nunca a resposta do jogador. Por isso a solução do
-  // JOGADOR é sempre solution[1..]. Quanto à posição:
-  //   • se o fen vem ANTES do setup, solution[0] é legal e o aplicamos;
-  //   • se o fen já vem DEPOIS do setup (caso da API), solution[0] é ilegal
-  //     (já foi jogado) e mantemos o fen como está.
-  // Em ambos os casos chegamos à posição em que é a vez do jogador resolver.
-  const sol = j.puzzle.solution ?? [];
-  const chess = new Chess(fenBase);
-  let lance: [string, string] | undefined;
-  if (sol.length > 1) {
-    const m0 = sol[0];
-    lance = [m0.slice(0, 2), m0.slice(2, 4)]; // destaque do lance que armou o puzzle
-    try {
-      chess.move({
-        from: m0.slice(0, 2),
-        to: m0.slice(2, 4),
-        promotion: m0.length > 4 ? m0.slice(4) : undefined,
-      });
-    } catch {
-      /* setup já refletido no fen — não aplica */
-    }
-  } else {
+  // 2) FEN entregue pela API.
+  if (j.puzzle.fen) {
     const lm = j.puzzle.lastMove;
-    lance = lm && lm.length >= 4 ? [lm.slice(0, 2), lm.slice(2, 4)] : undefined;
+    candidatos.push({
+      fen: j.puzzle.fen,
+      lance: lm && lm.length >= 4 ? [lm.slice(0, 2), lm.slice(2, 4)] : undefined,
+    });
   }
-  const fenSolver = chess.fen();
+
+  const montado = montarPuzzle(candidatos, sol);
+  if (!montado) {
+    throw new LichessErro('status', 'Não foi possível montar este puzzle (dados inconsistentes).');
+  }
+
   return {
     id: j.puzzle.id,
-    fen: fenSolver,
-    solucao: sol.length > 1 ? sol.slice(1) : sol,
-    orientacao: fenSolver.split(' ')[1] === 'w' ? 'white' : 'black',
-    lance,
+    fen: montado.fen,
+    solucao: montado.solucao,
+    orientacao: montado.fen.split(' ')[1] === 'w' ? 'white' : 'black',
+    lance: montado.lance,
     fonte: 'lichess',
     rating: j.puzzle.rating,
     temas: j.puzzle.themes,
   };
+}
+
+/** Extrai os lances SAN de um PGN (descarta números, comentários e resultado). */
+function sanDoPgn(pgn: string): string[] {
+  return pgn
+    .replace(/\{[^}]*\}/g, ' ')
+    .replace(/\d+\.(\.\.)?/g, ' ')
+    .replace(/(1-0|0-1|1\/2-1\/2|\*)/g, ' ')
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean);
+}
+
+/** Aplica uma sequência de lances UCI a uma FEN; devolve a FEN final ou null se algum for ilegal. */
+function aplicarLinha(fen: string, ucis: string[]): string | null {
+  const c = new Chess(fen);
+  for (const u of ucis) {
+    if (u.length < 4) return null;
+    try {
+      const m = c.move({
+        from: u.slice(0, 2),
+        to: u.slice(2, 4),
+        promotion: u.length > 4 ? u.slice(4) : undefined,
+      });
+      if (!m) return null;
+    } catch {
+      return null;
+    }
+  }
+  return c.fen();
+}
+
+/**
+ * Escolhe, entre os candidatos de posição, a interpretação em que a solução é
+ * totalmente legal. Preferimos a convenção do Lichess (solution[0] = lance do
+ * ADVERSÁRIO; o jogador resolve solution[1..]); se não couber, tentamos a
+ * convenção "o jogador joga solution[0]".
+ */
+function montarPuzzle(
+  candidatos: { fen: string; lance?: [string, string] }[],
+  sol: string[],
+): { fen: string; solucao: string[]; lance?: [string, string] } | null {
+  // Convenção do Lichess: solution[0] é SEMPRE o lance do adversário (o "setup"),
+  // e o jogador resolve solution[1..]. Para cada candidato:
+  //   • se solution[0] é legal nele, o candidato é PRÉ-setup → aplicamos o setup;
+  //   • se solution[0] é ilegal (já foi jogado), o candidato JÁ é a posição do
+  //     jogador (pós-setup) → usamos como está.
+  // Em ambos, validamos que o restante da solução é totalmente legal.
+  if (sol.length > 1) {
+    const setupSquares: [string, string] = [sol[0].slice(0, 2), sol[0].slice(2, 4)];
+    const resto = sol.slice(1);
+    for (const cand of candidatos) {
+      const aposSetup = aplicarLinha(cand.fen, [sol[0]]);
+      if (aposSetup !== null) {
+        if (aplicarLinha(aposSetup, resto) !== null) {
+          return { fen: aposSetup, solucao: resto, lance: setupSquares };
+        }
+      } else if (aplicarLinha(cand.fen, resto) !== null) {
+        return { fen: cand.fen, solucao: resto, lance: cand.lance ?? setupSquares };
+      }
+    }
+  }
+  // Fallback (dados atípicos): o jogador joga solution[0] direto.
+  for (const cand of candidatos) {
+    if (aplicarLinha(cand.fen, sol) !== null) {
+      return { fen: cand.fen, solucao: sol, lance: cand.lance };
+    }
+  }
+  return null;
 }
 
 /** Baixa o PGN de uma partida da base de mestres (texto PGN). */

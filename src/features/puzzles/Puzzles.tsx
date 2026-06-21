@@ -8,13 +8,8 @@ import {
   LichessErro,
   type DificuldadePuzzle,
 } from '../../core/lichess';
-import {
-  solucaoPtbr,
-  lerEstat,
-  registrarResultado,
-  type Puzzle,
-  type EstatPuzzle,
-} from '../../core/puzzles';
+import { solucaoPtbr, type Puzzle } from '../../core/puzzles';
+import { useProgresso, registrarPuzzle } from '../../core/progresso';
 import { miar } from '../../core/meow';
 import './Puzzles.css';
 
@@ -53,7 +48,7 @@ export function Puzzles({
   const [tentou, setTentou] = useState(false); // errou ao menos uma vez neste puzzle
   const [dica, setDica] = useState(false);
   const [sync, setSync] = useState(0);
-  const [estat, setEstat] = useState<EstatPuzzle>(lerEstat());
+  const estat = useProgresso();
 
   const abortRef = useRef<AbortController | null>(null);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -111,6 +106,11 @@ export function Puzzles({
     if (fonte === 'lichess') {
       if (!puzzle || puzzle.fonte !== 'lichess') void proximoLichess();
     } else {
+      // Cancela qualquer busca do Lichess em andamento, para o resultado dela não
+      // sobrescrever o puzzle do erro carregado (bug do "Treinar meus erros").
+      abortRef.current?.abort();
+      setCarregando(false);
+      setErroMsg(undefined);
       if (errosPuzzles.length > 0) carregar(errosPuzzles[Math.min(idxErro, errosPuzzles.length - 1)]);
       else setPuzzle(null);
     }
@@ -130,10 +130,10 @@ export function Puzzles({
   const concluir = useCallback(
     (limpo: boolean) => {
       setStatus('resolvido');
-      setEstat(registrarResultado(true, limpo)); // resolvido conta sempre
+      registrarPuzzle(true, limpo, puzzle?.rating); // resolvido conta sempre
       miar(limpo ? 2 : 1);
     },
-    [],
+    [puzzle],
   );
 
   // Aplica um lance correto e, se houver, a resposta forçada do adversário.
@@ -222,7 +222,7 @@ export function Puzzles({
     limparTimers();
     setDica(false);
     setStatus('revelado'); // a seta verde + o texto mostram o lance certo
-    setEstat(registrarResultado(false, false)); // viu a solução: não conta como resolvido
+    registrarPuzzle(false, false); // viu a solução: não conta como resolvido
   }, [puzzle, limparTimers]);
 
   const proximo = useCallback(() => {
@@ -297,10 +297,10 @@ export function Puzzles({
           </div>
           <div className="pz-estat" title="Resolvidos · sequência · recorde">
             <span>
-              <b>{estat.resolvidos}</b> resolvidos
+              <b>{estat.puzzlesResolvidos}</b> resolvidos
             </span>
             <span>
-              🔥 <b>{estat.sequencia}</b> · recorde {estat.recorde}
+              🔥 <b>{estat.puzzleSequencia}</b> · recorde {estat.puzzleRecorde}
             </span>
           </div>
         </div>

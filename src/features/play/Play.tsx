@@ -19,6 +19,7 @@ import {
 } from '../../core/chess';
 import { Engine, NIVEIS, type Nivel, type LiveInfo } from '../../core/engine';
 import { useSettings } from '../../core/settings';
+import { registrarPartida } from '../../core/progresso';
 import { sanParaPtBr } from '../../core/notation';
 import { detectarAbertura } from '../../core/openingDetect';
 import { gerarPgn } from '../../core/pgn';
@@ -46,6 +47,7 @@ export function Play({
 }) {
   const chessRef = useRef<Chess>(new Chess());
   const engineRef = useRef<Engine | null>(null);
+  const fimRegistradoRef = useRef(false); // garante 1 registro de progresso por partida
 
   // Nível e lado vêm das Configurações globais (persistidos, fora do painel).
   const { nivel, lado } = useSettings();
@@ -147,7 +149,12 @@ export function Play({
     setSanHist(chess.history());
     const fim = avaliarFim(chess);
     setFimMsg(fim.acabou ? fim.motivo : undefined);
-  }, []);
+    // Registra a partida no progresso uma única vez, ao terminar.
+    if (fim.acabou && !fimRegistradoRef.current) {
+      fimRegistradoRef.current = true;
+      registrarPartida(fim.vencedor === lado);
+    }
+  }, [lado]);
 
   // Pede ao motor o lance da vez e aplica.
   const jogarMotor = useCallback(async () => {
@@ -181,6 +188,7 @@ export function Play({
   const novaPartida = useCallback(() => {
     const chess = new Chess();
     chessRef.current = chess;
+    fimRegistradoRef.current = false;
     engineRef.current?.setNivel(nivel);
     setFen(chess.fen());
     setSanHist([]);

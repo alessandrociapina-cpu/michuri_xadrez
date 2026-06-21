@@ -95,9 +95,19 @@
 .cfg-btn span[aria-hidden='true'] {
   font-size: 17px;
 }
+.cfg-btn.icone {
+  padding: 0;
+  width: 42px;
+  justify-content: center;
+}
 .cfg-btn:hover {
   border-color: var(--gold);
   background: var(--ink-3);
+}
+.hdr-acoes {
+  display: flex;
+  gap: 8px;
+  flex: none;
 }
 /* No celular, com 4 abas, a barra de navegação não cabe na mesma linha da marca.
    Reorganizamos: marca + Configurações na 1ª linha, e a barra de abas numa linha
@@ -110,7 +120,7 @@
   .brand {
     order: 1;
   }
-  .cfg-btn {
+  .hdr-acoes {
     order: 2;
     margin-left: auto;
   }

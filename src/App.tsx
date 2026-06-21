@@ -6,6 +6,7 @@ import { Puzzles } from './features/puzzles/Puzzles';
 import { Michuri } from './components/Michuri';
 import { Splash } from './components/Splash';
 import { Configuracoes } from './components/Configuracoes';
+import { Progresso } from './components/Progresso';
 import {
   ehRetornoOAuth,
   estaLogado,
@@ -30,6 +31,7 @@ export function App() {
   const [lichessErro, setLichessErro] = useState<string | undefined>();
 
   const [cfgAberta, setCfgAberta] = useState(false);
+  const [progAberta, setProgAberta] = useState(false);
 
   // Puzzles gerados a partir dos erros da última partida analisada.
   const [errosPuzzles, setErrosPuzzles] = useState<Puzzle[]>([]);
@@ -117,18 +119,29 @@ export function App() {
             Puzzles
           </button>
         </nav>
-        <button
-          className="cfg-btn"
-          onClick={() => setCfgAberta(true)}
-          aria-label="Abrir configurações"
-          title="Configurações: nível, lado, tabuleiro, peças e som"
-        >
-          <span aria-hidden="true">⚙</span>
-          <span className="cfg-btn-tx">Configurações</span>
-        </button>
+        <div className="hdr-acoes">
+          <button
+            className="cfg-btn icone"
+            onClick={() => setProgAberta(true)}
+            aria-label="Progresso e conquistas"
+            title="Progresso e conquistas"
+          >
+            <span aria-hidden="true">🏆</span>
+          </button>
+          <button
+            className="cfg-btn"
+            onClick={() => setCfgAberta(true)}
+            aria-label="Abrir configurações"
+            title="Configurações: nível, lado, tabuleiro, peças e som"
+          >
+            <span aria-hidden="true">⚙</span>
+            <span className="cfg-btn-tx">Configurações</span>
+          </button>
+        </div>
       </header>
 
       {cfgAberta && <Configuracoes onFechar={() => setCfgAberta(false)} />}
+      {progAberta && <Progresso onFechar={() => setProgAberta(false)} />}
 
       <main className="app-main">
         {/* Mantemos as telas montadas para preservar o estado (partida em

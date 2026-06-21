@@ -3,6 +3,7 @@ import type { Key } from 'chessground/types';
 import { Board } from '../../components/Board';
 import { Chess, destinosLegais, type Move } from '../../core/chess';
 import { Engine } from '../../core/engine';
+import { registrarAbertura } from '../../core/progresso';
 import { sanParaPtBr } from '../../core/notation';
 import { OPENINGS, type Opening } from './data';
 import './Trainer.css';
@@ -108,6 +109,11 @@ function Estudo({
     setIdx(n);
     setAnalise(null);
   }, []);
+
+  // Estudou a linha até o fim → registra no progresso.
+  useEffect(() => {
+    if (total > 0 && idx >= total) registrarAbertura(opening.name, 'estudo');
+  }, [idx, total, opening.name]);
 
   // Navegação por teclado quando o módulo está ativo.
   useEffect(() => {
@@ -350,6 +356,7 @@ function Treino({
         setAnalise(null);
         const novaPos = pos + 1;
         setPos(novaPos);
+        if (novaPos >= total) registrarAbertura(opening.name, 'treino');
         setFeedback(
           novaPos >= total
             ? { tipo: 'fim', msg: `Linha completa! ${esperado.note}` }

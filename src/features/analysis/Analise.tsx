@@ -23,6 +23,7 @@ import {
   type ExplorerGame,
 } from '../../core/lichess';
 import { gerarPuzzlesDeErros, type Puzzle } from '../../core/puzzles';
+import { registrarAnalise } from '../../core/progresso';
 import { PARTIDAS_FAMOSAS, type JogoFamoso } from './famousGames';
 import './Analise.css';
 
@@ -411,6 +412,7 @@ export function Analise({
         setRelatorio(rel);
         setPly(0);
         onErrosPuzzles(gerarPuzzlesDeErros(rel)); // alimenta o "Treine seus erros"
+        registrarAnalise(Math.max(rel.precisao.white, rel.precisao.black));
       }
     } catch (e) {
       setAviso(`Falha na análise: ${(e as Error).message}`);

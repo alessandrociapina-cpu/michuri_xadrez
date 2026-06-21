@@ -173,40 +173,30 @@ export async function buscarPuzzleLichess(
   const sol = j.puzzle.solution ?? [];
   if (sol.length === 0) throw new LichessErro('status', 'Puzzle sem solução.');
 
-  // Montagem ROBUSTA: em vez de confiar numa única convenção (que variava e
-  // gerava setas ilegais), montamos candidatos de posição inicial e escolhemos a
-  // interpretação em que TODA a solução é legal. Assim a posição e os lances
-  // mostrados são sempre consistentes.
-  const candidatos: { fen: string; lance?: [string, string] }[] = [];
-  // 1) Reconstrução canônica: game.pgn reproduzido até initialPly.
-  if (j.game?.pgn && j.puzzle.initialPly != null) {
-    const c = new Chess();
-    for (const san of sanDoPgn(j.game.pgn).slice(0, j.puzzle.initialPly)) {
-      try {
-        c.move(san);
-      } catch {
-        break;
-      }
+  // Posições-base possíveis (a vez de quem resolve). A principal é o FIM do
+  // game.pgn — é o que o Lichess mostra (posição após o último lance do
+  // adversário, com o jogador a mover, jogando solution[0]).
+  const bases: { fen: string; lance?: [string, string] }[] = [];
+  if (j.game?.pgn) {
+    const fim = posFinalPgn(j.game.pgn);
+    if (fim) bases.push(fim);
+    if (j.puzzle.initialPly != null) {
+      const ate = posAteN(j.game.pgn, j.puzzle.initialPly);
+      if (ate) bases.push(ate);
     }
-    const hist = c.history({ verbose: true });
-    const last = hist[hist.length - 1];
-    candidatos.push({
-      fen: c.fen(),
-      lance: last ? [last.from, last.to] : undefined,
-    });
   }
-  // 2) FEN entregue pela API.
   if (j.puzzle.fen) {
     const lm = j.puzzle.lastMove;
-    candidatos.push({
+    bases.push({
       fen: j.puzzle.fen,
       lance: lm && lm.length >= 4 ? [lm.slice(0, 2), lm.slice(2, 4)] : undefined,
     });
   }
 
-  const montado = montarPuzzle(candidatos, sol);
+  const montado = montarPuzzle(bases, sol);
   if (!montado) {
-    throw new LichessErro('status', 'Não foi possível montar este puzzle (dados inconsistentes).');
+    const diag = `sol0=${sol[0] ?? '-'} bases=${bases.map((b) => b.fen.split(' ')[1]).join(',') || '-'}`;
+    throw new LichessErro('status', `Não foi possível montar este puzzle. [${diag}]`);
   }
 
   return {
@@ -232,6 +222,48 @@ function sanDoPgn(pgn: string): string[] {
     .filter(Boolean);
 }
 
+/** Posição e último lance ao fim do PGN (loadPgn robusto, com replay manual de reserva). */
+function posFinalPgn(pgn: string): { fen: string; lance?: [string, string] } | null {
+  let c = new Chess();
+  let ok = false;
+  try {
+    c.loadPgn(pgn);
+    ok = c.history().length > 0;
+  } catch {
+    ok = false;
+  }
+  if (!ok) {
+    c = new Chess();
+    for (const san of sanDoPgn(pgn)) {
+      try {
+        c.move(san);
+      } catch {
+        break;
+      }
+    }
+  }
+  const h = c.history({ verbose: true });
+  if (h.length === 0) return null;
+  const last = h[h.length - 1];
+  return { fen: c.fen(), lance: [last.from, last.to] };
+}
+
+/** Posição após N meios-lances do PGN. */
+function posAteN(pgn: string, n: number): { fen: string; lance?: [string, string] } | null {
+  const c = new Chess();
+  const sans = sanDoPgn(pgn);
+  for (let i = 0; i < n && i < sans.length; i++) {
+    try {
+      c.move(sans[i]);
+    } catch {
+      break;
+    }
+  }
+  const h = c.history({ verbose: true });
+  const last = h[h.length - 1];
+  return { fen: c.fen(), lance: last ? [last.from, last.to] : undefined };
+}
+
 /** Aplica uma sequência de lances UCI a uma FEN; devolve a FEN final ou null se algum for ilegal. */
 function aplicarLinha(fen: string, ucis: string[]): string | null {
   const c = new Chess(fen);
@@ -252,40 +284,45 @@ function aplicarLinha(fen: string, ucis: string[]): string | null {
 }
 
 /**
- * Escolhe, entre os candidatos de posição, a interpretação em que a solução é
- * totalmente legal. Preferimos a convenção do Lichess (solution[0] = lance do
- * ADVERSÁRIO; o jogador resolve solution[1..]); se não couber, tentamos a
- * convenção "o jogador joga solution[0]".
+ * Escolhe a montagem (posição + solução do jogador) em que TODA a solução é
+ * legal, testando interpretações em ordem de preferência:
+ *   1. o jogador joga solution[0] a partir do FIM do pgn (comportamento do site);
+ *   2. "setup-first": aplica solution[0] (lance do adversário) e o jogador
+ *      resolve solution[1..];
+ *   3. "pós-setup": a base já é a posição do jogador, resolve solution[1..];
+ *   4. o jogador joga solution[0] a partir de qualquer base.
+ * A validação por legalidade garante que nunca mostramos um lance inexistente.
  */
 function montarPuzzle(
-  candidatos: { fen: string; lance?: [string, string] }[],
+  bases: { fen: string; lance?: [string, string] }[],
   sol: string[],
 ): { fen: string; solucao: string[]; lance?: [string, string] } | null {
-  // Convenção do Lichess: solution[0] é SEMPRE o lance do adversário (o "setup"),
-  // e o jogador resolve solution[1..]. Para cada candidato:
-  //   • se solution[0] é legal nele, o candidato é PRÉ-setup → aplicamos o setup;
-  //   • se solution[0] é ilegal (já foi jogado), o candidato JÁ é a posição do
-  //     jogador (pós-setup) → usamos como está.
-  // Em ambos, validamos que o restante da solução é totalmente legal.
-  if (sol.length > 1) {
-    const setupSquares: [string, string] = [sol[0].slice(0, 2), sol[0].slice(2, 4)];
-    const resto = sol.slice(1);
-    for (const cand of candidatos) {
-      const aposSetup = aplicarLinha(cand.fen, [sol[0]]);
-      if (aposSetup !== null) {
-        if (aplicarLinha(aposSetup, resto) !== null) {
-          return { fen: aposSetup, solucao: resto, lance: setupSquares };
-        }
-      } else if (aplicarLinha(cand.fen, resto) !== null) {
-        return { fen: cand.fen, solucao: resto, lance: cand.lance ?? setupSquares };
-      }
+  if (bases.length === 0) return null;
+  const setup: [string, string] | undefined =
+    sol[0] && sol[0].length >= 4 ? [sol[0].slice(0, 2), sol[0].slice(2, 4)] : undefined;
+  const resto = sol.length > 1 ? sol.slice(1) : null;
+
+  type T = { fen: string; solucao: string[]; lance?: [string, string] };
+  const tuplas: T[] = [];
+
+  // 1. solver-first a partir do fim do pgn (base[0]).
+  tuplas.push({ fen: bases[0].fen, solucao: sol, lance: bases[0].lance });
+  // 2. setup-first em cada base.
+  if (resto) {
+    for (const b of bases) {
+      const ap = aplicarLinha(b.fen, [sol[0]]);
+      if (ap) tuplas.push({ fen: ap, solucao: resto, lance: setup });
     }
   }
-  // Fallback (dados atípicos): o jogador joga solution[0] direto.
-  for (const cand of candidatos) {
-    if (aplicarLinha(cand.fen, sol) !== null) {
-      return { fen: cand.fen, solucao: sol, lance: cand.lance };
-    }
+  // 3. pós-setup em cada base (descarta solution[0], já jogado).
+  if (resto) {
+    for (const b of bases) tuplas.push({ fen: b.fen, solucao: resto, lance: b.lance ?? setup });
+  }
+  // 4. solver-first em qualquer base.
+  for (const b of bases) tuplas.push({ fen: b.fen, solucao: sol, lance: b.lance });
+
+  for (const t of tuplas) {
+    if (t.solucao.length > 0 && aplicarLinha(t.fen, t.solucao) !== null) return t;
   }
   return null;
 }

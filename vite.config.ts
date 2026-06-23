@@ -75,7 +75,7 @@ export default defineConfig({
         // O .wasm tem ~560 KB; o asm.js de fallback ~1,5 MB. Elevamos o limite
         // para que o Workbox faça precache de ambos.
         maximumFileSizeToCacheInBytes: 4 * 1024 * 1024,
-        globPatterns: ['**/*.{js,css,html,svg,png,jpg,wasm,woff2}'],
+        globPatterns: ['**/*.{js,css,html,svg,png,jpg,wasm,woff2,wav}'],
       },
     }),
   ],
